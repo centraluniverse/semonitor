@@ -117,7 +117,7 @@ def getArgs():
     elif args.datasource != "stdin":
         # figure out the list of valid serial ports on this server
         # this is either a list of tuples or ListPortInfo objects
-        serial_ports = serial.tools.list_ports.comports()
+        serial_ports = serial.tools.list_ports.comports(include_links=True)
         serial_port_names = map(lambda p: p.device if isinstance(p,
                                 serial.tools.list_ports_common.ListPortInfo) else p[0], serial_ports)
         serialDevice = args.datasource in serial_port_names
