@@ -7,6 +7,8 @@ import select
 import logging
 import se.logutils
 
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 socketTimeout = 120.0
 
@@ -52,7 +54,7 @@ def openDataSocket(ports):
 
 # open serial device
 def openSerial(inFileName, baudRate):
-    return serial.Serial(inFileName, baudrate=baudRate)
+    return serial.Serial(Path(inFileName).resolve(), baudrate=baudRate)
 
 def openInFile(inFileName):
     if inFileName == "stdin":

@@ -119,7 +119,7 @@ def getArgs():
         # this is either a list of tuples or ListPortInfo objects
         serial_ports = serial.tools.list_ports.comports()
         serial_port_names = map(lambda p: p.device if isinstance(p,
-                                serial.tools.list_ports_common.ListPortInfo) else p[0], serial_ports)
+                                serial.tools.list_ports_common(include_links=True).ListPortInfo) else p[0], serial_ports)
         serialDevice = args.datasource in serial_port_names
 
     # network interface validation
