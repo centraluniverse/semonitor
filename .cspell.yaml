@@ -64,10 +64,15 @@ words:
   # tools and distribution packaging
   - Containerfile
   - addopts
+  - adduser
+  - autotag
   - codespell
+  - dialout
   - exitfirst
   - htmlcov
   - junitxml
+  - nofile
+  - nologin
   - numprocesses
   - pygrep
   - testpaths
@@ -89,6 +94,7 @@ words:
   - ttyname
   - tzset
   - tzutc
+  - ulimits
   - unhexlify
   - usefixtures
   # programs and files of this project
