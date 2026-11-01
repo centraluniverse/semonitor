@@ -32,6 +32,8 @@ UPDATE_SIZE = 0x80000
 threadLock = threading.Lock()  # lock to synchronize reads and writes
 masterEvent = threading.Event()  # event to signal RS485 master release
 nadirEpoch = None  # UNIX epoch of the daily exit, None when disabled
+inverterSkew = None  # inverter clock minus our clock in seconds, None until known
+MAX_TIME_SKEW = 300  # seconds of clock difference to tolerate
 
 # program termination
 def terminate(code=0, msg=b""):
@@ -40,6 +42,24 @@ def terminate(code=0, msg=b""):
     else:
         logger.error(msg)
     sys.exit(code)
+
+# log a warning when our clock differs a lot from the inverter's
+def checkTimeSkew():
+    if inverterSkew is not None and abs(inverterSkew) > MAX_TIME_SKEW:
+        logger.warning("our clock is %d seconds %s the inverter's, check the system time",
+                       abs(inverterSkew), "behind" if inverterSkew > 0 else "ahead of")
+
+# remember how far the inverter's clock is from ours
+def getInverterTime(msgData):
+    global inverterSkew
+    try:
+        stamps = [time.mktime(time.strptime(rec["Date"] + " " + rec["Time"], "%Y-%m-%d %H:%M:%S"))
+                  for kind in ("inverters", "optimizers") for rec in msgData.get(kind, {}).values()
+                  if rec.get("Date") != "invalid"]
+    except (AttributeError, KeyError, ValueError):
+        return
+    if stamps:
+        inverterSkew = max(stamps) - time.time()
 
 # process the input data
 def readData(args, mode, state, dataFile, recFile, outFile):
@@ -98,11 +118,13 @@ def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
                 # send ack
                 replyFunction = se.commands.PROT_RESP_ACK
                 replyData = b""
+                getInverterTime(msgData)
             elif function == 0x0503:  # encryption key
                 # send ack
                 replyFunction = se.commands.PROT_RESP_ACK
                 replyData = b""
             elif function == se.commands.PROT_CMD_SERVER_GET_GMT:  # time request
+                checkTimeSkew()
                 # set time
                 replyFunction = se.commands.PROT_RESP_SERVER_GMT
                 replyData = se.data.formatTime(int(time.time()),
