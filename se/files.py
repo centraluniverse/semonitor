@@ -2,11 +2,14 @@
 
 import logging
 import sys
+import time
 from pathlib import Path
 
 import serial
 
 logger = logging.getLogger(__name__)
+DATE_PLACEHOLDER = "__date__"
+DATETIME_PLACEHOLDER = "__datetime__"
 
 
 def open_serial(in_file_name, baud_rate):
@@ -65,6 +68,10 @@ def open_out_file(file_name, write_mode="wb"):
         The open file, or None if no name is given.
     """
     if file_name:
+        file_name = file_name.replace(DATE_PLACEHOLDER, time.strftime("%Y%m%d"))
+        file_name = file_name.replace(
+            DATETIME_PLACEHOLDER, time.strftime("%Y%m%d%H%M%S")
+        )
         path = Path(file_name)
         path.parent.mkdir(parents=True, exist_ok=True)
         if write_mode == "wb":
