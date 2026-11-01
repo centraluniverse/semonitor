@@ -65,7 +65,9 @@ def open_out_file(file_name, write_mode="wb"):
         The open file, or None if no name is given.
     """
     if file_name:
-        return Path(file_name).open(write_mode)
+        path = Path(file_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path.open(write_mode)
     return None
 
 
