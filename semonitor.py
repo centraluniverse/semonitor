@@ -40,6 +40,7 @@ MAX_TIME_SKEW = 300  # seconds our clock may differ from the inverter's
 # global variables
 thread_lock = threading.Lock()  # lock to synchronize reads and writes
 master_event = threading.Event()  # event to signal RS485 master release
+eod_event = threading.Event()  # end-of-day event of the inverter received
 inverter_skew = {"seconds": None}  # inverter clock minus ours, None if unknown
 
 
@@ -124,7 +125,7 @@ def read_data(args, mode, state, files):
             with thread_lock:
                 se.logutils.set_state(state, "threadLock", value=True)
                 try:
-                    process_msg(msg, mode, state, files)
+                    process_msg(msg, args, mode, state, files)
                 except Exception as ex:
                     logger.info("Failed to parse message: %s", ex)
                     for line in se.logutils.format_data(msg):
@@ -132,9 +133,11 @@ def read_data(args, mode, state, files):
                     if args.xerror:
                         raise
                 se.logutils.set_state(state, "threadLock", value=False)
+                if eod_event.is_set():  # exit, the main thread terminates
+                    break
 
 
-def process_msg(msg, mode, state, files):
+def process_msg(msg, args, mode, state, files):
     """
     Parse a received message and act on it.
 
@@ -164,6 +167,18 @@ def process_msg(msg, mode, state, files):
                     msg_seq, to_addr, from_addr, reply_function, reply_data
                 )
                 se.msg.send_msg(files.data, msg, files.rec)
+        # the data is written and acknowledged, so the end-of-day event
+        # can end the run
+        if (
+            args.nadir == se.env.NADIR_EVENT
+            and function == se.commands.PROT_CMD_SERVER_POST_DATA
+            and data
+            and any(
+                e.get("Type") == 0 for e in msg_data.get("events", {}).values()
+            )
+        ):
+            logger.info("nadir event received")
+            eod_event.set()
 
 
 def master_reply(function, state):
@@ -332,10 +347,14 @@ def read_passive(args, mode, state, files):
         terminate(1, "Reading the input failed, exiting")
 
 
-def block(state, read_thread=None):
-    """Sleep until a keyboard interrupt, then dump the state."""
+def block(state, nadir_epoch=None, read_thread=None):
+    """Sleep until a keyboard interrupt, the nadir, or the end-of-day event."""
     try:
         while True:
+            if nadir_epoch is not None and time.time() >= nadir_epoch:
+                terminate(0, "Nadir reached, exiting")
+            if eod_event.is_set():
+                terminate(0, "Nadir event received, exiting")
             # a read thread that stopped lost its input, which is an error
             if read_thread is not None and not read_thread.is_alive():
                 se.logutils.dump_state(state)
@@ -368,6 +387,37 @@ def next_seq():
     return seq
 
 
+def next_nadir_epoch(nadir, now=None):
+    """
+    Return the UNIX epoch timestamp of the next occurrence of a local time.
+
+    The nadir is that local time of day, and the next occurrence is later
+    today or tomorrow. Now is a UNIX epoch timestamp as well, and defaults to
+    the current time.
+
+    Args:
+        nadir: The local time of day, with hour, minute and second.
+        now: The UNIX epoch timestamp to count from, or None for the current
+            time.
+
+    Returns:
+        The UNIX epoch timestamp of the next occurrence.
+    """
+    now = time.time() if now is None else now
+    today = time.localtime(now)
+
+    # Build the day from the calendar date, not by adding 24h to the instant:
+    # a day is 23 or 25 hours long when the clocks change. mktime() takes care
+    # of that, and of a day past the end of the month.
+    def at(day):
+        return time.mktime(
+            (*today[:2], day, nadir.hour, nadir.minute, nadir.second, 0, 0, -1)
+        )
+
+    target = at(today.tm_mday)
+    return target if target > now else at(today.tm_mday + 1)
+
+
 def main():
     # create the state variables with timestamps
     state = {}
@@ -379,6 +429,18 @@ def main():
 
     # get the command line arguments and run mode
     (args, mode) = se.env.get_args()
+
+    # calculate the nadir once, only when enabled
+    nadir_epoch = None
+    if args.nadir == se.env.NADIR_EVENT:
+        logger.info("nadir on inverter end-of-day event")
+    elif args.nadir is not None:
+        nadir_epoch = next_nadir_epoch(args.nadir)
+        logger.info(
+            "nadir at epoch %d (%s)",
+            nadir_epoch,
+            time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(nadir_epoch)),
+        )
 
     # open the specified data source
     logger.info("opening %s", args.datasource)
@@ -421,7 +483,7 @@ def main():
         if args.master:  # send RS485 master commands
             start_master(args=(state, data_file, rec_file, args.slaves))
         # wait for termination
-        block(state, read_thread)
+        block(state, nadir_epoch, read_thread)
 
     # cleanup
     se.files.close_data(data_file)
