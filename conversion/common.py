@@ -33,4 +33,3 @@ def unwrap_metricsDict(mydict):
                     yield nice(k2), v2
                 else:
                     yield "{}.{}".format(nice(k), nice(k2)), v2
-

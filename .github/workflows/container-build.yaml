@@ -1,4 +1,4 @@
-name: Create and publish Container image
+name: CI/CD
 
 on:
   push:
@@ -16,7 +16,13 @@ env:
   TEST_TAG: ${{ github.repository }}:${{github.run_id}}
 
 jobs:
+  lint:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yaml
+
   build-and-push-image:
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
