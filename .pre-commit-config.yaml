@@ -153,3 +153,10 @@ repos:
         additional_dependencies: [ruff]
         entry: ruff format
         types_or: [python, pyi, markdown]
+
+      - id: hadolint
+        name: hadolint
+        language: python
+        additional_dependencies: [hadolint-py]
+        entry: hadolint
+        files: ^Containerfile\.
