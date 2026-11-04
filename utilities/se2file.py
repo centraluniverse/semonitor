@@ -7,6 +7,7 @@ import datetime
 from collections import OrderedDict
 import argparse
 
+
 def main():
     # parse the command line arguments
     args = getargs()
@@ -39,13 +40,15 @@ def main():
     lcnt = 0
     filebuffersize = 0
     blank_cnt = 0
-    while looper or blank_cnt <= blank_max: # If stdin is set, the blank_cnt will be ignored
+    while (
+        looper or blank_cnt <= blank_max
+    ):  # If stdin is set, the blank_cnt will be ignored
         lcnt += 1
         jsonStr = inFile.readline().strip()
         curepoch = int(time.time())
         # wait for and handle data coming in
         if jsonStr != "":
-            blank_cnt = 0 # If we have data, reset the blank_cnt variable
+            blank_cnt = 0  # If we have data, reset the blank_cnt variable
             if debug:
                 print("Got some data: %s" % jsonStr)
             curtime = datetime.datetime.now()
@@ -58,7 +61,9 @@ def main():
             if make_daily_dir == True:
                 if not os.path.isdir(basedir + "/" + curday):
                     os.mkdir(basedir + "/" + curday)
-                tfname = basedir + "/" + curday + "/" + prefix + curstore + ".json"
+                tfname = (
+                    basedir + "/" + curday + "/" + prefix + curstore + ".json"
+                )
             else:
                 tfname = basedir + "/" + prefix + curstore + ".json"
             if tfname != writefilename:
@@ -73,7 +78,7 @@ def main():
                 writefilename = tfname
 
             if writefile is None:
-                writefile  = open(writefilename, "a",  buffering=filebuffersize)
+                writefile = open(writefilename, "a", buffering=filebuffersize)
             writefile.write(jsonStr + "\n")
             lastwrite = curepoch
             writefile.close()
