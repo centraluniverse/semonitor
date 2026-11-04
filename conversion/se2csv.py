@@ -67,12 +67,16 @@ if __name__ == "__main__":
 
     # process the data
     for jsonStr in args.infile:
-        for baseName, devAttrs in sorted(unwrap_metricsDict(json.loads(jsonStr))):
+        for baseName, devAttrs in sorted(
+            unwrap_metricsDict(json.loads(jsonStr))
+        ):
             devName, devId = baseName.split(".", 1)
             if devName not in devsFile:
-                devsFileName = '{}.{}.csv'.format(args.prefix, devName)
-                itemNames = [ "__Identifier__"] + sorted(devAttrs.keys())
-                devsFile[devName] = csv.DictWriter(open(devsFileName, "a" if args.append else "w"), itemNames)
+                devsFileName = "{}.{}.csv".format(args.prefix, devName)
+                itemNames = ["__Identifier__"] + sorted(devAttrs.keys())
+                devsFile[devName] = csv.DictWriter(
+                    open(devsFileName, "a" if args.append else "w"), itemNames
+                )
                 if args.headers:
                     devsFile[devName].writeheader()
 
