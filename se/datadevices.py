@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 # Spacer field for documenting field definitions more neatly, used for convenience
 sp = "\n\t\t\t\t\t\t: "
 # Create a "utility" constant, to use later to make code less verbose
-nan = float('nan')
+nan = float("nan")
+
 
 class ParseDevice(dict):
     """
@@ -56,8 +57,8 @@ class ParseDevice(dict):
     """
 
     _dev = 0xFFFF  # dummy value, I hope. Should be overwritten in subclasses.
-    _devName = 'Unknown_device'
-    dev_type = '{}_{:#06x}'.format(_devName, _dev)
+    _devName = "Unknown_device"
+    dev_type = "{}_{:#06x}".format(_devName, _dev)
 
     # DEFINITIONS for items in new devices, filled in for subclasses of ParseDevice.
     #
@@ -106,7 +107,7 @@ class ParseDevice(dict):
         # Search for a subclass which can handle this se_type
         for subclass in cls.__subclasses__():
             if subclass._dev == seType:
-                return (subclass(data))
+                return subclass(data)
 
         # Otherwise either return a ParseDevice_Explorer (explorer=True),
         # which is a special subclass which will parse almost anything,
@@ -136,7 +137,7 @@ class ParseDevice(dict):
 
     @staticmethod
     def parseId(seId):
-        return ("%x" % (seId & 0xff7fffff)).upper()
+        return ("%x" % (seId & 0xFF7FFFFF)).upper()
 
     # format a date
     @staticmethod
@@ -168,17 +169,17 @@ class ParseDevice(dict):
         lineSize = 16
 
         def hexLine(data):
-            return ' '.join("{:02x}".format(x) for x in data)
+            return " ".join("{:02x}".format(x) for x in data)
 
         hexLines = []
         if data:
             printPtr = 0
             while len(data) - printPtr >= lineSize:
-                hexLines.append(hexLine(data[printPtr:printPtr + lineSize]))
+                hexLines.append(hexLine(data[printPtr : printPtr + lineSize]))
                 printPtr += lineSize
             if printPtr < len(data):
                 hexLines.append(hexLine(data[printPtr:]))
-        return ' | '.join(hexLines)
+        return " | ".join(hexLines)
 
     @staticmethod
     def unhexData(hexData):
@@ -201,29 +202,34 @@ class ParseDevice(dict):
         dataPtr = 0
         devHdrLen = 8
         # device header
-        (seType, seId,
-         devLen) = struct.unpack("<HLH", data[dataPtr:dataPtr + devHdrLen])
+        (seType, seId, devLen) = struct.unpack(
+            "<HLH", data[dataPtr : dataPtr + devHdrLen]
+        )
         dataPtr += devHdrLen
 
         # For (almost) all subclasses, dev_type will already have this value.
         # This is necessary only when a default catchall parse is happening, because a specific parser for seType has
         # not been defined.
-        self.dev_type = '{}_{:#06x}'.format(self._devName, seType)
+        self.dev_type = "{}_{:#06x}".format(self._devName, seType)
         # Store seId as an attribute for later use as part of the standard "dictionary of dictionaries" wrapper when
         # a parsed instance is converted to json.
         self._seId = self.parseId(seId)
 
-        self.update({
-            'seType': '{:#06x}'.format(seType),
-            'seId': self._seId,
-            'devLen': devLen,
-            'devType': self.dev_type
-        })
+        self.update(
+            {
+                "seType": "{:#06x}".format(seType),
+                "seId": self._seId,
+                "devLen": devLen,
+                "devType": self.dev_type,
+            }
+        )
 
         if self.field_defs_len > devLen:
             raise ValueError(
-                'You have defined more bytes, {}, than the message contains, {}'.
-                format(self.field_defs_len, devLen))
+                "You have defined more bytes, {}, than the message contains, {}".format(
+                    self.field_defs_len, devLen
+                )
+            )
         elif self.field_defs_len < devLen:
             # By default, convert any remaining undefined bytes to their representation as a hexadecimal string.
             self.field_defs.append(
@@ -237,10 +243,17 @@ class ParseDevice(dict):
                 ]
             )
 
-        for paramLen, paramInFmt, paramName, outFormatFn, out, comment in self.field_defs:
+        for (
+            paramLen,
+            paramInFmt,
+            paramName,
+            outFormatFn,
+            out,
+            comment,
+        ) in self.field_defs:
             # Extract the field
-            if paramInFmt == 'hex':
-                self[paramName] = data[dataPtr:dataPtr + paramLen]
+            if paramInFmt == "hex":
+                self[paramName] = data[dataPtr : dataPtr + paramLen]
             # Check for a specific value which I believe should be interpreted as NaN
             # In little endian format '\xff\xff\x7f\xff' unpacks as -3.402...*10**38.
             # But the SolarEdge messages seem to use it to signify "not reported".
@@ -249,29 +262,35 @@ class ParseDevice(dict):
             # Note that if unpacked in **big** endian format, this special value actually unpacks as NaN.
             # I suspect a legacy "bug" somewhere in the SolarEdge messages, but in the meantime just check the bytes
             # and fix it.
-            elif paramInFmt == 'f' and (
-                    data[dataPtr:dataPtr + paramLen] == b'\xff\xff\x7f\xff'):
-                self[paramName] = float('nan')
+            elif paramInFmt == "f" and (
+                data[dataPtr : dataPtr + paramLen] == b"\xff\xff\x7f\xff"
+            ):
+                self[paramName] = float("nan")
             else:
                 self[paramName] = struct.unpack(
-                    '<' + paramInFmt, data[dataPtr:dataPtr + paramLen])[0]
+                    "<" + paramInFmt, data[dataPtr : dataPtr + paramLen]
+                )[0]
                 if "s" in paramInFmt:
                     # Python 3.x requires that we convert byte string to Unicode string
                     # if the value is to be used (later on) as a dictionary key for nested fields
                     # Required for e.g. battery IDs
                     # Remove trailing 'null' character (i.e. 0x00) at the same time
-                    self[paramName] = self[paramName].decode('utf-8').strip('\x00')
+                    self[paramName] = (
+                        self[paramName].decode("utf-8").strip("\x00")
+                    )
 
             # Optionally format the field
-            if outFormatFn == 'dateTime':
+            if outFormatFn == "dateTime":
                 try:
-                    self['Date'] = self.formatDateStamp(self[paramName])
+                    self["Date"] = self.formatDateStamp(self[paramName])
                 except ValueError:
-                    logger.debug("'%s' is not a valid date, changed to '1970-01-01'",
-                        format(self[paramName]))
-                    self['Date'] = "1970-01-01"
+                    logger.debug(
+                        "'%s' is not a valid date, changed to '1970-01-01'",
+                        format(self[paramName]),
+                    )
+                    self["Date"] = "1970-01-01"
                 try:
-                    self['Time'] = self.formatTimeStamp(self[paramName])
+                    self["Time"] = self.formatTimeStamp(self[paramName])
                 except ValueError:
                     logger.debug(
                         "'%s' is not a valid time, changed to '00:00:01'",
@@ -295,8 +314,13 @@ class ParseDevice(dict):
         for hypothesis in self._hypotheses:
             if not eval(hypothesis):
                 msg = [
-                    "Failed hypothesis", self.__class__.__name__, self["Date"],
-                    self["Time"], ":", hypothesis, "is not True"
+                    "Failed hypothesis",
+                    self.__class__.__name__,
+                    self["Date"],
+                    self["Time"],
+                    ":",
+                    hypothesis,
+                    "is not True",
                 ]
                 logging.warn(" ".join(msg))
 
@@ -324,19 +348,23 @@ class ParseDevice(dict):
         # "uninteresting" and will not be output to CSV
         # Extract a list of the names of "interesting" items, that will routinely be sent to CSV and Graphite.
         devItemNames = [
-            name for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
+            name
+            for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
             if out
         ]
-        devItemNames.extend([
-            paramName for paramName, paramDefault, out, comment in cls._derivn
-            if out
-        ])
+        devItemNames.extend(
+            [
+                paramName
+                for paramName, paramDefault, out, comment in cls._derivn
+                if out
+            ]
+        )
         # Find the dateTime output format entry (if it exists) and insert additional separate Date and Time items
         try:
             iDateTime = [
                 outFmt
                 for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
-            ].index('dateTime')  # + 3
+            ].index("dateTime")  # + 3
             devItemNames.insert(iDateTime, "Time")
             devItemNames.insert(iDateTime, "Date")
         except ValueError:
@@ -345,10 +373,13 @@ class ParseDevice(dict):
 
     @property
     def field_defs_len(self):
-        """The total number of bytes described by field_defs."""
-        return sum([
-            itemLen for itemLen, fmt, name, outFmt, out, comment in self.field_defs
-        ])
+        """The total number of bytes described by fieldDefs."""
+        return sum(
+            [
+                itemLen
+                for itemLen, fmt, name, outFmt, out, comment in self.field_defs
+            ]
+        )
 
     @classmethod
     def itemDefs(cls):
@@ -360,32 +391,49 @@ class ParseDevice(dict):
         """
         msg = [
             "\n\n{} / {} parses data blocks with seType = {:#06x}.\n{}".format(
-                cls.__name__, cls.dev_type, cls._dev, "=" * 80)
+                cls.__name__, cls.dev_type, cls._dev, "=" * 80
+            )
         ]
         msg.append("Items are:")
         itemLine = "{:<4} ({:^6})   {:<6} | {:<25} \n\t\t\t\t\t\t: {:<0}\n"
         msg.append(
-            itemLine.format("Byte", "Length", "Word", "Item Name", "Meaning"))
+            itemLine.format("Byte", "Length", "Word", "Item Name", "Meaning")
+        )
         msg.append(
-            itemLine.format("_" * 4, "_" * 6, "_" * 6, "_" * 25, "_" * 40))
+            itemLine.format("_" * 4, "_" * 6, "_" * 6, "_" * 25, "_" * 40)
+        )
         byte = 0
         word = byte / 4.0
         if len(cls.field_defs) > 0:
-            for paramLen, paramInFmt, paramName, outFormatFn, out, comment in cls.field_defs:
+            for (
+                paramLen,
+                paramInFmt,
+                paramName,
+                outFormatFn,
+                out,
+                comment,
+            ) in cls.field_defs:
                 msg.append(
-                    itemLine.format(byte, paramLen, word, paramName, comment))
+                    itemLine.format(byte, paramLen, word, paramName, comment)
+                )
                 byte += paramLen
                 word = byte / 4.0
         if len(cls._derivn) > 0:
             msg.append("Derived items\n")
             for paramName, paramDefault, out, comment in cls._derivn:
                 msg.append(
-                    itemLine.format('----', '------', '----', paramName,
-                                    '(default={}) {}'.format(
-                                        paramDefault, comment)))
+                    itemLine.format(
+                        "----",
+                        "------",
+                        "----",
+                        paramName,
+                        "(default={}) {}".format(paramDefault, comment),
+                    )
+                )
         for subclass in cls.__subclasses__():
             msg.append(subclass.itemDefs())
         return "\n".join(msg)
+
 
 class ParseDevice_0x0030(ParseDevice):
     def __new__(cls, data):
@@ -398,8 +446,8 @@ class ParseDevice_0x0030(ParseDevice):
         return super(ParseDevice, cls).__new__(cls)
 
     _dev = 0x0030
-    _devName = 'batteries'
-    dev_type = '{}_{:#06x}'.format(_devName, _dev)
+    _devName = "batteries"
+    dev_type = "{}_{:#06x}".format(_devName, _dev)
     field_defs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -511,6 +559,7 @@ class ParseDevice_0x0030(ParseDevice):
         """
         return {self.dev_type: {self._seId: {self["batteryId"]: self}}}
 
+
 class ParseDevice_0x0022(ParseDevice):
     def __new__(cls, data):
         # Create a bare minimum instance of a dictionary.
@@ -520,8 +569,8 @@ class ParseDevice_0x0022(ParseDevice):
         return super(ParseDevice, cls).__new__(cls)
 
     _dev = 0x0022
-    _devName = 'meters'
-    dev_type = '{}_{:#06x}'.format(_devName, _dev)
+    _devName = "meters"
+    dev_type = "{}_{:#06x}".format(_devName, _dev)
     field_defs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -760,7 +809,7 @@ class ParseDevice_0x0022(ParseDevice):
         # of a Python NaN. Read as LITTLE endian it becomes "-3.2... 10^38" which is unlikely to be meant as a real value!
         # Most of these are filtered out later, but occasionally if the interval is short one slips through anyway.
         # Short intervals appear to happen about once a day, perhaps when the inverter is going to sleep for the night.
-        if self['P2X'] < -3 * 10**38:
+        if self["P2X"] < -3 * 10**38:
             self["P2X"] = nan
 
     def wrap_in_ids(self):
@@ -786,12 +835,13 @@ class ParseDevice_0x0022(ParseDevice):
             5: "5_GridImportExport",
             7: "7_Battery",
             8: "8_MostlyZeroes",
-            9: "9_PVProduction"
+            9: "9_PVProduction",
         }
         recTypeLabel = recTypeLabels.get(
             self["recType"], "{}_UnrecognizedRecType".format(self["recType"])
         )
         return {self.dev_type: {self._seId: {recTypeLabel: self}}}
+
 
 class ParseDevice_Explorer(ParseDevice):
     """
@@ -815,9 +865,9 @@ class ParseDevice_Explorer(ParseDevice):
         # the recursion limit was reached!
         return super(ParseDevice, cls).__new__(cls)
 
-    _dev = 0xffff  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
-    _devName = 'explore'
-    dev_type = '{}_{:#06x}'.format(_devName, _dev)
+    _dev = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
+    _devName = "explore"
+    dev_type = "{}_{:#06x}".format(_devName, _dev)
     field_defs = []
     _itemNames = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
@@ -840,8 +890,9 @@ class ParseDevice_Explorer(ParseDevice):
         dataPtr = 0
         devHdrLen = 8
         # device header
-        (seType, seId,
-         devLen) = struct.unpack("<HLH", data[dataPtr:dataPtr + devHdrLen])
+        (seType, seId, devLen) = struct.unpack(
+            "<HLH", data[dataPtr : dataPtr + devHdrLen]
+        )
 
         self._dev = seType
         self._field_defs_len = devLen
@@ -849,16 +900,18 @@ class ParseDevice_Explorer(ParseDevice):
         # However ParseDevice_Explorer can be used as a default parser, when a new device is encountered, in which case
         # the actual instance value of seType would be unknown when the seDataDevices module was imported (or in other
         # words, ParseDevice_Explorer._dev will contain a nonsense value which must be corrected when real data is read)
-        self.dev_type = '{}_{:#06x}'.format(self._devName, seType)
+        self.dev_type = "{}_{:#06x}".format(self._devName, seType)
         self._seId = seId
 
         dataPtr += devHdrLen
-        self.update({
-            'seType': '{:#06x}'.format(seType),
-            'seId': self.parseId(seId),
-            'devLen': devLen,
-            'devType': self.dev_type
-        })
+        self.update(
+            {
+                "seType": "{:#06x}".format(seType),
+                "seId": self.parseId(seId),
+                "devLen": devLen,
+                "devType": self.dev_type,
+            }
+        )
 
         # First, dump a hex version of the whole block into one field
         self["AllAsHex"] = self.hexData(data[dataPtr:])
@@ -884,38 +937,40 @@ class ParseDevice_Explorer(ParseDevice):
         if offset <= (devlen - 1):
             # Parse items which may be 1 byte long
             itemName = "offset{:03}_1_hex1".format(offset)
-            self[itemName] = self.hexData(data[offset:offset + 1])
+            self[itemName] = self.hexData(data[offset : offset + 1])
             self._itemNames.append(itemName)
 
         if offset <= (devlen - 2):
             # Parse items which may be 2 bytes long
             itemName = "offset{:03}_1_hex2".format(offset)
-            self[itemName] = self.hexData(data[offset:offset + 2])
+            self[itemName] = self.hexData(data[offset : offset + 2])
             self._itemNames.append(itemName)
             itemName = "offset{:03}_4_int2".format(offset)
-            self[itemName] = struct.unpack("<H", data[offset:offset + 2])[0]
+            self[itemName] = struct.unpack("<H", data[offset : offset + 2])[0]
             self._itemNames.append(itemName)
 
         if offset <= (devlen - 4):
             # Parse items which may be 4 bytes long
             itemName = "offset{:03}_1_hex4".format(offset)
-            self[itemName] = self.hexData(data[offset:offset + 4])
+            self[itemName] = self.hexData(data[offset : offset + 4])
             self._itemNames.append(itemName)
             itemName = "offset{:03}_3_float_LE".format(offset)
-            self[itemName] = struct.unpack("<f", data[offset:offset + 4])[0]
+            self[itemName] = struct.unpack("<f", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
             itemName = "offset{:03}_3_float_BE".format(offset)
-            self[itemName] = struct.unpack(">f", data[offset:offset + 4])[0]
+            self[itemName] = struct.unpack(">f", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
             itemName = "offset{:03}_4_int4".format(offset)
-            self[itemName] = struct.unpack("<L", data[offset:offset + 4])[0]
+            self[itemName] = struct.unpack("<L", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
             # Maybe it is a date?
             try:
                 self["Date_offset{:03}".format(offset)] = self.formatDateStamp(
-                    self[itemName])
+                    self[itemName]
+                )
                 self["Time_offset{:03}".format(offset)] = self.formatTimeStamp(
-                    self[itemName])
+                    self[itemName]
+                )
                 # Other modules (e.g. se2graphite) become upset if Date and Time
                 # are not supplied, so take the 1st valid Date we find.
                 # Implicitly I'm guessing offset zero is the "real" date.
@@ -924,10 +979,12 @@ class ParseDevice_Explorer(ParseDevice):
                     self["Time"] = self.formatTimeStamp(self[itemName])
             except ValueError:
                 # Apparently it is not a date!
-                self["Date_offset{:03}".format(
-                    offset)] = '{} is not a Date'.format(self[itemName])
-                self["Time_offset{:03}".format(
-                    offset)] = '{} is not a Time'.format(self[itemName])
+                self["Date_offset{:03}".format(offset)] = (
+                    "{} is not a Date".format(self[itemName])
+                )
+                self["Time_offset{:03}".format(offset)] = (
+                    "{} is not a Time".format(self[itemName])
+                )
             self._itemNames.append("Date_offset{:03}".format(offset))
             self._itemNames.append("Time_offset{:03}".format(offset))
 
@@ -955,7 +1012,8 @@ and the Python field type they have been parsed as.
 Inspecting the parsed fields (e.g. using se2csv) and identifying sensible and/or recognized values is
 a step towards deciphering a new se_type block, and creating a more sensible parser for it.""",
         ]
-        return '\n'.join(msg)
+        return "\n".join(msg)
+
 
 def merge_update(dict1, dict2):
     """

@@ -22,4 +22,4 @@ except IndexError:
 
 for line in logFile:
     if line[0:5] == "data:":
-         dataFile.write(binascii.unhexlify(line[5:].replace(" ", "").strip()))
+        dataFile.write(binascii.unhexlify(line[5:].replace(" ", "").strip()))
