@@ -30,10 +30,10 @@ the deciphering of new seType devices. It is an alternative, of sorts, to examin
 using a hex editor.
 """
 
-import struct
-import time
 import binascii
 import logging
+import struct
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class ParseDevice(dict):
 
     _dev = 0xFFFF  # dummy value, I hope. Should be overwritten in subclasses.
     _devName = "Unknown_device"
-    dev_type = "{}_{:#06x}".format(_devName, _dev)
+    dev_type = f"{_devName}_{_dev:#06x}"
 
     # DEFINITIONS for items in new devices, filled in for subclasses of ParseDevice.
     #
@@ -116,24 +116,23 @@ class ParseDevice(dict):
         if explorer:
             # return a special ParseDevice which tries almost every field parsing it knows about
             return ParseDevice_Explorer(data)
-        else:
-            # return an instance of a basic dictionary (the base class for ParseDevice itself)
-            newInstance = super(ParseDevice, cls).__new__(cls)
-            # (Re)setting a basically empty (unknown) definition for this instance is crucial
-            # because you may have already encountered another unknown device with a *different* length and field_defs,
-            # and the parseDevTable method updates the *class* definition dynamically if it encounters more data than it
-            # expects.
-            newInstance.field_defs = [
-                [
-                    4,
-                    "L",
-                    "dateTime",
-                    "dateTime",
-                    False,
-                    "seconds, time since the epoch",
-                ]
+        # return an instance of a basic dictionary (the base class for ParseDevice itself)
+        newInstance = super().__new__(cls)
+        # (Re)setting a basically empty (unknown) definition for this instance is crucial
+        # because you may have already encountered another unknown device with a *different* length and field_defs,
+        # and the parseDevTable method updates the *class* definition dynamically if it encounters more data than it
+        # expects.
+        newInstance.field_defs = [
+            [
+                4,
+                "L",
+                "dateTime",
+                "dateTime",
+                False,
+                "seconds, time since the epoch",
             ]
-            return newInstance
+        ]
+        return newInstance
 
     @staticmethod
     def parseId(seId):
@@ -169,7 +168,7 @@ class ParseDevice(dict):
         lineSize = 16
 
         def hexLine(data):
-            return " ".join("{:02x}".format(x) for x in data)
+            return " ".join(f"{x:02x}" for x in data)
 
         hexLines = []
         if data:
@@ -210,14 +209,14 @@ class ParseDevice(dict):
         # For (almost) all subclasses, dev_type will already have this value.
         # This is necessary only when a default catchall parse is happening, because a specific parser for seType has
         # not been defined.
-        self.dev_type = "{}_{:#06x}".format(self._devName, seType)
+        self.dev_type = f"{self._devName}_{seType:#06x}"
         # Store seId as an attribute for later use as part of the standard "dictionary of dictionaries" wrapper when
         # a parsed instance is converted to json.
         self._seId = self.parseId(seId)
 
         self.update(
             {
-                "seType": "{:#06x}".format(seType),
+                "seType": f"{seType:#06x}",
                 "seId": self._seId,
                 "devLen": devLen,
                 "devType": self.dev_type,
@@ -225,12 +224,9 @@ class ParseDevice(dict):
         )
 
         if self.field_defs_len > devLen:
-            raise ValueError(
-                "You have defined more bytes, {}, than the message contains, {}".format(
-                    self.field_defs_len, devLen
-                )
-            )
-        elif self.field_defs_len < devLen:
+            msg = f"You have defined more bytes, {self.field_defs_len}, than the message contains, {devLen}"
+            raise ValueError(msg)
+        if self.field_defs_len < devLen:
             # By default, convert any remaining undefined bytes to their representation as a hexadecimal string.
             self.field_defs.append(
                 [
@@ -300,7 +296,6 @@ class ParseDevice(dict):
             elif outFormatFn is not None:
                 self[paramName] = outFormatFn(self[paramName])
             dataPtr += paramLen
-        return
 
     def setDerivationDefaults(self):
         for paramName, paramDefault, out, comment in self._derivn:
@@ -322,7 +317,7 @@ class ParseDevice(dict):
                     hypothesis,
                     "is not True",
                 ]
-                logging.warn(" ".join(msg))
+                logging.warning(" ".join(msg))
 
     def wrap_in_ids(self):
         """
@@ -375,10 +370,8 @@ class ParseDevice(dict):
     def field_defs_len(self):
         """The total number of bytes described by field_defs."""
         return sum(
-            [
-                itemLen
-                for itemLen, fmt, name, outFmt, out, comment in self.field_defs
-            ]
+            itemLen
+            for itemLen, fmt, name, outFmt, out, comment in self.field_defs
         )
 
     @classmethod
@@ -427,7 +420,7 @@ class ParseDevice(dict):
                         "------",
                         "----",
                         paramName,
-                        "(default={}) {}".format(paramDefault, comment),
+                        f"(default={paramDefault}) {comment}",
                     )
                 )
         for subclass in cls.__subclasses__():
@@ -441,13 +434,13 @@ class ParseDevice_0x0030(ParseDevice):
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
         # the recursion limit was reached!
-        # PS Note that a more usual idiom would be super(ParseDevice_0x0030, cls).__new__(cls), but this is what we
-        # are trying to avoid!
-        return super(ParseDevice, cls).__new__(cls)
+        # PS Note that a more usual idiom would be super().__new__(cls), but that
+        # is the __new__ of ParseDevice, which is what we are trying to avoid!
+        return dict.__new__(cls)
 
     _dev = 0x0030
     _devName = "batteries"
-    dev_type = "{}_{:#06x}".format(_devName, _dev)
+    dev_type = f"{_devName}_{_dev:#06x}"
     field_defs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -566,11 +559,11 @@ class ParseDevice_0x0022(ParseDevice):
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
         # the recursion limit was reached!
-        return super(ParseDevice, cls).__new__(cls)
+        return dict.__new__(cls)
 
     _dev = 0x0022
     _devName = "meters"
-    dev_type = "{}_{:#06x}".format(_devName, _dev)
+    dev_type = f"{_devName}_{_dev:#06x}"
     field_defs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -802,7 +795,7 @@ class ParseDevice_0x0022(ParseDevice):
     ]
 
     def __init__(self, data, explorer=False):
-        super(ParseDevice_0x0022, self).__init__(data)
+        super().__init__(data)
 
     def codeDerivations(self):
         # Filter out some sporadic 'NaN'-like values which appear in P2X.  The hex value is the BIG endian version
@@ -863,11 +856,11 @@ class ParseDevice_Explorer(ParseDevice):
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
         # the recursion limit was reached!
-        return super(ParseDevice, cls).__new__(cls)
+        return dict.__new__(cls)
 
     _dev = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
     _devName = "explore"
-    dev_type = "{}_{:#06x}".format(_devName, _dev)
+    dev_type = f"{_devName}_{_dev:#06x}"
     field_defs = []
     _itemNames = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
@@ -900,13 +893,13 @@ class ParseDevice_Explorer(ParseDevice):
         # However ParseDevice_Explorer can be used as a default parser, when a new device is encountered, in which case
         # the actual instance value of seType would be unknown when the seDataDevices module was imported (or in other
         # words, ParseDevice_Explorer._dev will contain a nonsense value which must be corrected when real data is read)
-        self.dev_type = "{}_{:#06x}".format(self._devName, seType)
+        self.dev_type = f"{self._devName}_{seType:#06x}"
         self._seId = seId
 
         dataPtr += devHdrLen
         self.update(
             {
-                "seType": "{:#06x}".format(seType),
+                "seType": f"{seType:#06x}",
                 "seId": self.parseId(seId),
                 "devLen": devLen,
                 "devType": self.dev_type,
@@ -922,7 +915,6 @@ class ParseDevice_Explorer(ParseDevice):
         for offset in range(0, devLen, 2):
             # Parse a range of possible interpretations of the (4) bytes beginning at offset.
             self.parseAtOffset(data[dataPtr:], offset, devLen)
-        return
 
     def parseAtOffset(self, data, offset, devlen):
         """
@@ -933,42 +925,41 @@ class ParseDevice_Explorer(ParseDevice):
         :param devlen: The length of the data message (we cannot parse beyond this!)
         :return: None, but entries are added into self (the dictionary of itemName -> parsedValue)
         """
-
         if offset <= (devlen - 1):
             # Parse items which may be 1 byte long
-            itemName = "offset{:03}_1_hex1".format(offset)
+            itemName = f"offset{offset:03}_1_hex1"
             self[itemName] = self.hexData(data[offset : offset + 1])
             self._itemNames.append(itemName)
 
         if offset <= (devlen - 2):
             # Parse items which may be 2 bytes long
-            itemName = "offset{:03}_1_hex2".format(offset)
+            itemName = f"offset{offset:03}_1_hex2"
             self[itemName] = self.hexData(data[offset : offset + 2])
             self._itemNames.append(itemName)
-            itemName = "offset{:03}_4_int2".format(offset)
+            itemName = f"offset{offset:03}_4_int2"
             self[itemName] = struct.unpack("<H", data[offset : offset + 2])[0]
             self._itemNames.append(itemName)
 
         if offset <= (devlen - 4):
             # Parse items which may be 4 bytes long
-            itemName = "offset{:03}_1_hex4".format(offset)
+            itemName = f"offset{offset:03}_1_hex4"
             self[itemName] = self.hexData(data[offset : offset + 4])
             self._itemNames.append(itemName)
-            itemName = "offset{:03}_3_float_LE".format(offset)
+            itemName = f"offset{offset:03}_3_float_LE"
             self[itemName] = struct.unpack("<f", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
-            itemName = "offset{:03}_3_float_BE".format(offset)
+            itemName = f"offset{offset:03}_3_float_BE"
             self[itemName] = struct.unpack(">f", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
-            itemName = "offset{:03}_4_int4".format(offset)
+            itemName = f"offset{offset:03}_4_int4"
             self[itemName] = struct.unpack("<L", data[offset : offset + 4])[0]
             self._itemNames.append(itemName)
             # Maybe it is a date?
             try:
-                self["Date_offset{:03}".format(offset)] = self.formatDateStamp(
+                self[f"Date_offset{offset:03}"] = self.formatDateStamp(
                     self[itemName]
                 )
-                self["Time_offset{:03}".format(offset)] = self.formatTimeStamp(
+                self[f"Time_offset{offset:03}"] = self.formatTimeStamp(
                     self[itemName]
                 )
                 # Other modules (e.g. se2graphite) become upset if Date and Time
@@ -979,14 +970,14 @@ class ParseDevice_Explorer(ParseDevice):
                     self["Time"] = self.formatTimeStamp(self[itemName])
             except ValueError:
                 # Apparently it is not a date!
-                self["Date_offset{:03}".format(offset)] = (
-                    "{} is not a Date".format(self[itemName])
+                self[f"Date_offset{offset:03}"] = (
+                    f"{self[itemName]} is not a Date"
                 )
-                self["Time_offset{:03}".format(offset)] = (
-                    "{} is not a Time".format(self[itemName])
+                self[f"Time_offset{offset:03}"] = (
+                    f"{self[itemName]} is not a Time"
                 )
-            self._itemNames.append("Date_offset{:03}".format(offset))
-            self._itemNames.append("Time_offset{:03}".format(offset))
+            self._itemNames.append(f"Date_offset{offset:03}")
+            self._itemNames.append(f"Time_offset{offset:03}")
 
     @classmethod
     def itemNames(cls):
@@ -1036,8 +1027,8 @@ def merge_update(dict1, dict2):
         else:
             # We have reached the bottom of the dictionary of dictionaries structure and still have no NEW identifier keys.
             # So it looks like the inverter has reported new attributes for an existing instance identifier in the same message
-            message = "WARNING: For {} about to overwrite {} with {}".format(
-                k2, dict1[k2], v2
+            message = (
+                f"WARNING: For {k2} about to overwrite {dict1[k2]} with {v2}"
             )
             logger.debug(message)
             dict1[k2] = v2
