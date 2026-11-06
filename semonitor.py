@@ -303,24 +303,24 @@ def main():
     if mode.passiveMode:  # only reading from file or serial device
         # read until eof then terminate
         readPassive(args, mode, state, dataFile, recFile, outFile)
-    else:  # reading and writing to a serial device
-        if args.commands:  # commands were specified
-            # perform commands then terminate
-            doCommands(args, mode, state, dataFile, recFile, outFile)
-        else:  # interacting over RS232 or RS485
-            # start a separate thread for reading
-            readThread = threading.Thread(
-                name=READ_THREAD_NAME,
-                target=readInput,
-                args=(args, mode, state, dataFile, recFile, outFile),
-            )
-            readThread.daemon = True
-            readThread.start()
-            logger.info("starting %s", READ_THREAD_NAME)
-            if args.master:  # send RS485 master commands
-                startMaster(args=(state, dataFile, recFile, args.slaves))
-            # wait for termination
-            block(state, readThread)
+    # reading and writing to a serial device
+    elif args.commands:  # commands were specified
+        # perform commands then terminate
+        doCommands(args, mode, state, dataFile, recFile, outFile)
+    else:  # interacting over RS232 or RS485
+        # start a separate thread for reading
+        readThread = threading.Thread(
+            name=READ_THREAD_NAME,
+            target=readInput,
+            args=(args, mode, state, dataFile, recFile, outFile),
+        )
+        readThread.daemon = True
+        readThread.start()
+        logger.info("starting %s", READ_THREAD_NAME)
+        if args.master:  # send RS485 master commands
+            startMaster(args=(state, dataFile, recFile, args.slaves))
+        # wait for termination
+        block(state, readThread)
 
     # cleanup
     se.files.closeData(dataFile)
