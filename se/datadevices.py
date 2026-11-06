@@ -144,7 +144,7 @@ class ParseDevice(dict):
         try:
             return time.strftime("%Y-%m-%d", time.localtime(timeStamp))
         except Exception as ex:
-            logger.info("Invalid timestamp: " + str(timeStamp) + " " + str(ex))
+            logger.info("Invalid timestamp: %s %s", timeStamp, ex)
             return "invalid"
 
     # format a time
@@ -153,7 +153,7 @@ class ParseDevice(dict):
         try:
             return time.strftime("%H:%M:%S", time.localtime(timeStamp))
         except Exception as ex:
-            logger.info("Invalid timestamp: " + str(timeStamp) + " " + str(ex))
+            logger.info("Invalid timestamp: %s %s", timeStamp, ex)
             return "invalid"
 
     # format a hex entry as a readable string
