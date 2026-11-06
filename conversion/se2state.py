@@ -17,7 +17,7 @@ initialize = False
 # ignore the stats item
 def sumItems(itemDict, itemAttr):
     itemSum = 0
-    for item in itemDict.keys():
+    for item in itemDict:
         if item != "stats":
             itemSum += itemDict[item][itemAttr]
     return itemSum
@@ -96,7 +96,7 @@ with inFile:
         stateDict["inverters"].update(inDict["inverters"])
         stateDict["optimizers"].update(inDict["optimizers"])
         # compute optimizer power
-        for optimizer in stateDict["optimizers"].keys():
+        for optimizer in stateDict["optimizers"]:
             if optimizer != "stats":
                 stateDict["optimizers"][optimizer]["Pdc"] = (
                     stateDict["optimizers"][optimizer]["Vmod"]
