@@ -129,7 +129,7 @@ def validateMsg(msg):
     )
     if calcsum != checksum:
         logger.error(
-            "Checksum error. Expected 0x%04x, got 0x%04x" % (checksum, calcsum)
+            "Checksum error. Expected 0x%04x, got 0x%04x", checksum, calcsum
         )
         for l in se.logutils.format_data(msg):
             logger.data(l)
