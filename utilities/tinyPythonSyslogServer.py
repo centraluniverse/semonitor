@@ -8,6 +8,8 @@
 ## There are a few configuration parameters.
 ## Originally sourced from the gist at https://gist.github.com/marcelom/4218010
 
+import sys
+
 LOG_DIR = "logFiles"
 LOG_FILE = f"{LOG_DIR}/syslog.log"
 HOST, PORT = "0.0.0.0", 514
@@ -38,7 +40,7 @@ logger = logging.getLogger(__name__)
 class SyslogUDPHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         data = bytes.decode(self.request[0].strip())
-        print("%s : " % self.client_address[0], str(data))
+        sys.stderr.write(f"{self.client_address[0]} :  {data}\n")
         logger.info(str(data))
 
 
@@ -49,4 +51,4 @@ if __name__ == "__main__":
     except OSError, SystemExit:
         raise
     except KeyboardInterrupt:
-        print("Ctrl+C Pressed. Shutting down.")
+        sys.stderr.write("Ctrl+C Pressed. Shutting down.\n")
