@@ -63,12 +63,11 @@ def readBytes(inFile, recFile, length, mode, state):
     # read and write errors are raised, as they are not the end of the data
     se.logutils.setState(state, "readLength", length)
     inBuf = bytes(inFile.read(length))
-    if not inBuf:  # end of file
-        if mode.following:
-            # wait for more data
-            while not inBuf:
-                time.sleep(sleepInterval)
-                inBuf = inFile.read(length)
+    # at the end of file, wait for more data when following
+    if not inBuf and mode.following:
+        while not inBuf:
+            time.sleep(sleepInterval)
+            inBuf = inFile.read(length)
     recordMsg(inBuf, recFile)
     if inBuf:  # keep the last byte read at the end of file
         se.logutils.setState(
