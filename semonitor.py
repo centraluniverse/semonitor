@@ -171,7 +171,7 @@ def doCommands(args, mode, state, dataFile, recFile, outFile):
     for command in args.commands:
         # format the command parameters
         function = int(command[0], 16)
-        format = "<" + "".join(c[0] for c in command[1:])
+        struct_fmt = "<" + "".join(c[0] for c in command[1:])
         params = [int(p[1:], 16) for p in command[1:]]
         seq = nextSeq()
         # send the command
@@ -182,7 +182,7 @@ def doCommands(args, mode, state, dataFile, recFile, outFile):
                 MASTER_ADDR,
                 int(args.slaves[0], 16),
                 function,
-                struct.pack(format, *tuple(params)),
+                struct.pack(struct_fmt, *tuple(params)),
             ),
             recFile,
         )
