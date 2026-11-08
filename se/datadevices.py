@@ -34,6 +34,7 @@ import binascii
 import logging
 import struct
 import time
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class ParseDevice(dict):
     # Each field definition is (also) a list, with 6 members, namely
     # [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV) True or False, comment]
 
-    field_defs = [
+    field_defs: ClassVar[list[list[Any]]] = [
         # The following standard device header fields are automatically parsed for all device types.
         # These items do *not* need to be defined!
         # [2, 'H', 'seType', lambda hex: '{:#06x}'.format(hex), False, "Identifies the type of this SolarEdge data block],
@@ -88,14 +89,14 @@ class ParseDevice(dict):
     # (within the subclass that needs it) than to develop a completely new "syntax" for describing derivations!
     # see the codeDerivations method in the subclasses of ParseDevice for examples.
 
-    _derivn = [
+    _derivn: ClassVar[list[list[Any]]] = [
         # [paramName, paramDefault, out (to CSV) True or False, comment]
     ]
 
     # HYPOTHESES, optional, list of (valid Python) expressions which I expect to be always true.
     # Useful for generating debug alerts in the event of "new" unexpected values appearing in data items.
     # See ParseDevice_0x0030 for an example.
-    _hypotheses = []
+    _hypotheses: ClassVar[list[str]] = []
 
     def __new__(cls, data, explorer=False):
         # Some fancy footwork so that I can always start to create a ParseDevice, but actually get a subclass which is
@@ -440,7 +441,7 @@ class ParseDevice_0x0030(ParseDevice):
     _dev = 0x0030
     _devName = "batteries"
     dev_type = f"{_devName}_{_dev:#06x}"
-    field_defs = [
+    field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
         [
@@ -528,7 +529,7 @@ class ParseDevice_0x0030(ParseDevice):
         ],
     ]
 
-    _hypotheses = [
+    _hypotheses: ClassVar[list[str]] = [
         "abs(self['AlwaysZero_40_float']) < 10**25",
         "abs(self['AlwaysZero_48_float']) < 10**25",
         "abs(self['AlwaysZero_66_float']) < 10**25",
@@ -563,7 +564,7 @@ class ParseDevice_0x0022(ParseDevice):
     _dev = 0x0022
     _devName = "meters"
     dev_type = f"{_devName}_{_dev:#06x}"
-    field_defs = [
+    field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
         [
@@ -782,11 +783,11 @@ class ParseDevice_0x0022(ParseDevice):
         ],
     ]
 
-    _derivn = [
+    _derivn: ClassVar[list[list[Any]]] = [
         # [paramName, paramDefault, out (to CSV) True or False, comment]
     ]
 
-    _hypotheses = [
+    _hypotheses: ClassVar[list[str]] = [
         "self['AlwaysZero_off10_int2'] == 0",
         "self['AlwaysZero_off18_int2'] == 0",
         "self['AlwaysZero_off26_int2'] == 0",
@@ -860,8 +861,8 @@ class ParseDevice_Explorer(ParseDevice):
     _dev = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
     _devName = "explore"
     dev_type = f"{_devName}_{_dev:#06x}"
-    field_defs = []
-    _itemNames = ["seType", "seId", "devLen", "devType"]
+    field_defs: ClassVar[list[list[Any]]] = []
+    _itemNames: ClassVar[list[str]] = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
 
     def parseDevTable(self, data):
