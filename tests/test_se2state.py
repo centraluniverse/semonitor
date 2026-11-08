@@ -18,6 +18,12 @@ class Input:
     def __init__(self, lines):
         self.lines = list(lines)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
     def readline(self):
         if not self.lines:
             raise InputExhausted
@@ -31,6 +37,13 @@ pytestmark = pytest.mark.usefixtures("no_waiting")
 @pytest.fixture
 def no_waiting(monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+
+
+@pytest.fixture(autouse=True)
+def conversion_on_the_path(monkeypatch):
+    # A script finds its common.py next to itself, runpy does not add that.
+    monkeypatch.syspath_prepend(str(CONVERSION))
+    monkeypatch.delitem(sys.modules, "common", raising=False)
 
 
 def run_se2state(monkeypatch, lines, *args):

@@ -1,3 +1,33 @@
+"""Helper functions shared by the semonitor conversion scripts."""
+
+import sys
+from pathlib import Path
+
+
+def open_input(args):
+    """
+    Open the input of a conversion script.
+
+    The input is the file named by the first argument, or stdin when there is
+    none. A file that was asked for but cannot be opened is an error, it must
+    not silently turn into reading stdin. The error is then written to stderr
+    and the exit status is 1.
+
+    Args:
+        args: The positional command line arguments. The first one, if there is
+            one, names the input file.
+
+    Returns:
+        The open input file, or sys.stdin when there is no argument.
+    """
+    if not args:
+        return sys.stdin
+    try:
+        return Path(args[0]).open()
+    except OSError as ex:
+        sys.exit(f"{sys.argv[0]}: {ex}")
+
+
 def unwrap_metricsDict(mydict):
     """
     An iterator/generator function to "flatten" (aka unwrap) the attributes stored in the parsed device dictionaries,
