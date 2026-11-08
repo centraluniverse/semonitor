@@ -1,0 +1,48 @@
+name: Pages
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # workflow_run cannot filter on result or originating event, so guard here.
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download HTML coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-html
+          path: htmlcov/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Package Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: htmlcov/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Link report in summary
+        run: |
+          printf '\n[Browse the HTML coverage report](%s)\n' \
+            "${{ steps.deployment.outputs.page_url }}" >> "${GITHUB_STEP_SUMMARY}"
