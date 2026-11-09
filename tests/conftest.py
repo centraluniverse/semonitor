@@ -1,6 +1,7 @@
 import io
 import logging
 import runpy
+import struct
 import sys
 import time
 from pathlib import Path
@@ -14,6 +15,29 @@ SEMONITOR = REPO_ROOT / "semonitor.py"
 # The golden data, test/<kind>/<sample>.<ext>, and is shared with test/test.sh.
 GOLDEN_DIR = REPO_ROOT / "test"
 SAMPLES = sorted(path.stem for path in (GOLDEN_DIR / "rec").glob("*.rec"))
+
+
+def crc16(data):
+    """Return the CRC-16 of data, bit by bit: reflected 0x8005, init 0x5a5a."""
+    crc = 0x5A5A
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+    return crc
+
+
+def is_whole(msg):
+    """Whether msg is a whole frame, its length and checksum agree with it."""
+    if len(msg) < 18:
+        return False
+    (data_len,) = struct.unpack_from("<H", msg, 0)
+    end = 16 + data_len
+    if len(msg) < end + 2:
+        return False
+    (seq, source, dest, function) = struct.unpack_from("<HLLH", msg, 4)
+    body = struct.pack(">HLLH", seq, source, dest, function) + msg[16:end]
+    return struct.unpack_from("<H", msg, end)[0] == crc16(body)
 
 
 class RunResult(NamedTuple):
