@@ -14,7 +14,7 @@
 #
 # follow /root/solaredge/performance.json file and publish to topic "/ha/value/solaredge" on server "mosquitto.domain.local" with client id "solaredge" and user "solaredge" and password "s0lar3dg3"
 #
-# python3 semonitor.py -t 4 -d /root/solaredge/selog.txt -s 7f123456 -vvvv /dev/ttyUSB0 | python3 se2MQTT.py -c solaredge -u solaredge -p s0lar3dg3 -s mosquitto.domain.local -t /ha/value/solaredge
+# python3 semonitor.py -d /root/solaredge/selog.txt -s 7f123456 -vvvv /dev/ttyUSB0 | python3 se2MQTT.py -c solaredge -u solaredge -p s0lar3dg3 -s mosquitto.domain.local -t /ha/value/solaredge
 #
 # pipe output from semonitor directly into se2MQTT.py and publish to topic "/ha/value/solaredge" on server "mosquitto.domain.local" with client id "solaredge" and user "solaredge" and password "s0lar3dg3"
 

@@ -1,3 +1,4 @@
 *.pyc
 .DS_Store
 last0503.msg
+.venv/

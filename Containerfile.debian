@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Copyright (C) 2023 Olliver Schinagl <oliver@schinagl.nl>
+
+ARG PYTHON_VERSION="3-slim"
+
+FROM index.docker.io/library/python:${PYTHON_VERSION}
+
+COPY requirements.txt /tmp/
+
+# TODO: drop this ignore once a hadolint release newer than 2.15.1 is out.
+# hadolint ignore=DL3009
+RUN apt-get update && \
+    apt-get install --no-install-recommends --yes 'tzdata' && \
+    rm -f -r '/var/lib/apt/lists/' && \
+    pip --no-cache-dir install --requirement '/tmp/requirements.txt' && \
+    rm '/tmp/requirements.txt' && \
+    install -d -m 0775 '/usr/local/src' && \
+    useradd -d '/usr/local/src/semonitor' -G 'dialout' -m -r -s '/usr/sbin/nologin' 'semonitor' && \
+    install -d -m 0775 -g 'semonitor' -o 'semonitor' '/var/lib/semonitor'
+
+VOLUME /var/lib/semonitor
+
+WORKDIR /usr/local/src/semonitor/
+
+COPY conversion /usr/local/src/semonitor/conversion
+COPY se /usr/local/src/semonitor/se
+COPY semonitor.py /usr/local/src/semonitor/semonitor.py
+COPY services/container-entrypoint.sh /init
+COPY utilities /usr/local/src/semonitor/utilities
+
+USER semonitor
+
+ENTRYPOINT [ "/init" ]

@@ -4,6 +4,7 @@ import sys
 import serial.tools.list_ports
 import re
 import argparse
+import datetime
 from collections import namedtuple
 import logging
 import logging.handlers
@@ -11,12 +12,13 @@ import se.logutils
 
 logger = logging.getLogger(__name__)
 
+# local time of day for the daily exit when -n is given 'default'
+NADIR_DEFAULT = datetime.time(1, 40)
+
 # run environment that is derived from the arguments that defines how the program will behave
-RunMode = namedtuple("RunMode", ("serialDevice",  # boolean
-                                 "networkDevice", # boolean
-                                 "serialType",    # serial device type: "2" or "4"
-                                 "passiveMode",   # boolean
-                                 "masterMode",    # boolean
+RunMode = namedtuple("RunMode", ("serialDevice",  # boolean, data comes from a RS485 serial device
+                                 "passiveMode",   # boolean, only listen
+                                 "masterMode",    # boolean, function as RS485 master
                                  "following",     # boolean
                                  ))
 
@@ -47,13 +49,13 @@ def getArgs():
             slaves.append(s)
         return slaves
 
-    def validated_ports(ports_str):
-        ports = []
-        for p in ports_str.split(","):
-            if not re.match(r"^[0-9]+$", p):
-                raise argparse.ArgumentTypeError("Invalid port number: {}".format(p))
-            ports.append(int(p))
-        return ports
+    def validated_nadir(time_str):
+        if time_str.lower() == "default":
+            return NADIR_DEFAULT
+        m = re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", time_str)
+        if not m:
+            raise argparse.ArgumentTypeError("Invalid nadir, expected 24h HH:MM or 'default': {}".format(time_str))
+        return datetime.time(int(m.group(1)), int(m.group(2)))
 
     parser = SeArgumentParser(description='Parse Solaredge data to extract inverter and optimizer telemetry',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -63,12 +65,10 @@ def getArgs():
     parser.add_argument("-d", dest="logfile", default="stderr", help="where to write log messages.  either a file name or one of ['stderr', 'syslog']")
     parser.add_argument("-f", dest="follow", action="store_true", default=False, help="wait for appended data as the input file grows (as in tail -f)")
     parser.add_argument("-m", dest="master", action="store_true", default=False, help="function as a RS485 master")
+    parser.add_argument("-n", dest="nadir", type=validated_nadir, default=None, metavar="HH:MM|default", help="exit cleanly (status 0) once a day at the nadir, the local 24h HH:MM time the sun is lowest, so a container restart starts new output files. 'default' is 01:40. not set means never exit")
     parser.add_argument("-o", dest="outfile", default="stdout", help="write performance data to the specified file in JSON format (default: stdout)")
-    parser.add_argument("-p", dest="ports", type=validated_ports, default=[22222, 22221, 80], help="ports to listen on in network mode")
     parser.add_argument("-r", dest="record", help="file to record all incoming and outgoing messages to")
     parser.add_argument("-s", dest="slaves", type=validated_slaves, default=[], help="comma delimited list of SolarEdge slave inverter IDs")
-    parser.add_argument("-t", dest="type", choices=["2","4","n"], help="serial data source type (2=RS232, 4=RS485, n=network)")
-    parser.add_argument("-u", dest="updatefile", type=argparse.FileType('w'), help="file to write firmware update to (experimental)")
     parser.add_argument("-v", dest="verbose", action="count", default=0, help="verbose output")
     parser.add_argument("-x", dest="xerror", action="store_true", default=False, help="halt on data exception")
     parser.add_argument("datasource", default="stdin", nargs='?', help="Input filename or serial port")
@@ -105,10 +105,8 @@ def getArgs():
     root_logger.addHandler(handler)
 
     serialDevice = False
-    networkDevice = False
-    passiveMode = True
 
-    # data source validation
+    # data source validation (a RS485 serial device, a file or stdin)
     if args.datasource == "-":
         args.datasource = "stdin"
     elif args.datasource != "stdin":
@@ -119,36 +117,16 @@ def getArgs():
                                 serial.tools.list_ports_common.ListPortInfo) else p[0], serial_ports)
         serialDevice = args.datasource in serial_port_names
 
-    # network interface validation
-    if args.type == "n":
-        if args.datasource != "stdin":
-            parser.error("Input file cannot be specified for network mode")
-        args.datasource = "network"
-        networkDevice = True
-        passiveMode = False
-
-    # serial device validation
     if serialDevice:
-        serialDevice = True
         args.following = True
-        if args.type == "2":
-            passiveMode = False
-        elif args.type != "4":
-            parser.error("Input device type 2 or 4 must be specified for serial device")
-    else:
-        if args.type in ["2", "4"]:
-            parser.error(args.datasource+" is not a valid serial device"+"\n"+
-                         "Input device types 2 and 4 are only valid for a serial device")
 
     # master mode validation
+    passiveMode = not args.master
     if args.master:
-        passiveMode = False
-        if args.type != "4":
+        if not serialDevice:
             parser.error("Master mode only allowed with RS485 serial device")
         if len(args.slaves) < 1:
             parser.error("At least one slave address must be specified for master mode")
-    else:
-        passiveMode = True
 
     # command mode validation
     if args.commands:
@@ -162,8 +140,6 @@ def getArgs():
             v = " ".join(",".join(cpart for cpart in command) for command in v)
         if k == "slaves":
             v = ",".join(slave for slave in v)
-        if k == "ports":
-            v = ",".join(str(port) for port in v)
         logger.info("%s: %s", k, v)
 
-    return (args, RunMode(serialDevice, networkDevice, args.type, passiveMode, args.master, args.follow))
+    return (args, RunMode(serialDevice, passiveMode, args.master, args.follow))

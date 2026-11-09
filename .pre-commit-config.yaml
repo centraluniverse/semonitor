@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Copyright (C) 2026 Olliver Schinagl <oliver@schinagl.nl>
+
+# Setup, refresh venv cache ./setup-dev.sh
+# Run on everything: .venv/bin/pre-commit run --all-files
+
+# Never touch: golden test data and the verbatim GPLv3 text.
+exclude: ^(LICENSE$|test/(csv|json|pcap|rec)/)
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        language: python
+        additional_dependencies: [ruff]
+        entry: ruff check --fix --exit-non-zero-on-fix
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        language: python
+        additional_dependencies: [ruff]
+        entry: ruff format
+        types_or: [python, pyi, markdown]
+
+      - id: codespell
+        name: codespell
+        language: python
+        additional_dependencies: [codespell, tomli]
+        entry: codespell
+        types: [text]
+      - id: shellcheck
+        name: shellcheck
+        language: python
+        additional_dependencies: [shellcheck-py]
+        entry: shellcheck
+        types: [shell]
+      - id: yamllint
+        name: yamllint
+        language: python
+        additional_dependencies: [yamllint]
+        entry: yamllint
+        types: [yaml]
+      - id: hadolint
+        name: hadolint
+        language: python
+        additional_dependencies: [hadolint-py]
+        entry: hadolint
+        # Dockerfile and Containerfile are symlinks to Containerfile.alpine.
+        files: ^Containerfile\.
+
+      - id: check-added-large-files
+        name: check for added large files
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-added-large-files
+      - id: check-executables-have-shebangs
+        name: check that executables have shebangs
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-executables-have-shebangs
+        types: [text, executable]
+      - id: check-merge-conflict
+        name: check for merge conflicts
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-merge-conflict
+        types: [text]
+      - id: check-shebang-scripts-are-executable
+        name: check that scripts with shebangs are executable
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-shebang-scripts-are-executable
+        types: [text]
+      - id: check-toml
+        name: check toml
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-toml
+        types: [toml]
+      - id: check-yaml
+        name: check yaml
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: check-yaml
+        types: [yaml]
+      - id: end-of-file-fixer
+        name: fix end of files
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: end-of-file-fixer
+        types: [text]
+      - id: mixed-line-ending
+        name: mixed line ending
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: mixed-line-ending --fix=no
+        types: [text]
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        language: python
+        additional_dependencies: [pre-commit-hooks]
+        entry: trailing-whitespace-fixer --markdown-linebreak-ext=md
+        types: [text]

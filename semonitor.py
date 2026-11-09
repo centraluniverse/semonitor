@@ -3,6 +3,7 @@
 # SolarEdge inverter performance monitoring using the SolarEdge protocol
 
 import time
+import datetime
 import threading
 import sys
 import struct
@@ -25,11 +26,13 @@ MASTER_MSG_INTERVAL = 5
 MASTER_MSG_TIMEOUT = 10
 MASTER_ADDR = 0xfffffffe
 SEQ_FILE_NAME = "seseq.txt"
-UPDATE_SIZE = 0x80000
 
 # global variables
 threadLock = threading.Lock()  # lock to synchronize reads and writes
 masterEvent = threading.Event()  # event to signal RS485 master release
+nadirEpoch = None  # UNIX epoch of the daily exit, None when disabled
+inverterSkew = None  # inverter clock minus our clock in seconds, None until known
+MAX_TIME_SKEW = 300  # seconds of clock difference to tolerate
 
 # program termination
 def terminate(code=0, msg=b""):
@@ -39,10 +42,27 @@ def terminate(code=0, msg=b""):
         logger.error(msg)
     sys.exit(code)
 
+# log a warning when our clock differs a lot from the inverter's
+def checkTimeSkew():
+    if inverterSkew is not None and abs(inverterSkew) > MAX_TIME_SKEW:
+        logger.warning("our clock is %d seconds %s the inverter's, check the system time",
+                       abs(inverterSkew), "behind" if inverterSkew > 0 else "ahead of")
+
+# remember how far the inverter's clock is from ours
+def getInverterTime(msgData):
+    global inverterSkew
+    try:
+        stamps = [time.mktime(time.strptime(rec["Date"] + " " + rec["Time"], "%Y-%m-%d %H:%M:%S"))
+                  for kind in ("inverters", "optimizers") for rec in msgData.get(kind, {}).values()
+                  if rec.get("Date") != "invalid"]
+    except (AttributeError, KeyError, ValueError):
+        return
+    if stamps:
+        inverterSkew = max(stamps) - time.time()
+
 # process the input data
 def readData(args, mode, state, dataFile, recFile, outFile):
     eof = False
-    updateBuf = list(b"\x00" * UPDATE_SIZE) if args.updatefile else []
     if mode.passiveMode:
         # skip data until the start of the first complete message
         (msg, eof) = se.msg.readMsg(dataFile, recFile, mode, state)
@@ -50,18 +70,13 @@ def readData(args, mode, state, dataFile, recFile, outFile):
         (msg, eof) = se.msg.readMsg(dataFile, recFile, mode, state)
         if eof:  # end of file
             logger.info("End of file")
-            # eof from network means connection was broken, wait for a reconnect and continue
-            if mode.networkDevice:
-                se.files.closeData(dataFile, True)
-                dataFile = se.files.openDataSocket(args.ports)
-                eof = False
         if msg == b"\x00" * len(msg):  # ignore messages containing all zeros
             logger.data(msg)
         else:
             with threadLock:
                 se.logutils.setState(state, "threadLock", True)
                 try:
-                    processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf)
+                    processMsg(msg, mode, state, dataFile, recFile, outFile)
                 except Exception as ex:
                     logger.info("Failed to parse message: "+str(ex))
                     for l in se.logutils.format_data(msg):
@@ -69,13 +84,9 @@ def readData(args, mode, state, dataFile, recFile, outFile):
                     if args.xerror:
                         raise
                 se.logutils.setState(state, "threadLock", False)
-    # all finished
-    if args.updatefile:  # write the firmware update file
-        writeUpdate(updateBuf, args.updatefile)
-    return
 
 # process a received message
-def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
+def processMsg(msg, mode, state, dataFile, recFile, outFile):
     # parse the message
     (msgSeq, fromAddr, toAddr, function, data) = se.msg.parseMsg(msg)
     if function == 0:
@@ -88,19 +99,19 @@ def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
         if function == se.commands.PROT_CMD_SERVER_POST_DATA and data:  # performance data
             # write performance data to output file
             se.data.writeData(msgData, outFile)
-        elif updateBuf and function == se.commands.PROT_CMD_UPGRADE_WRITE:  # firmware update data
-            updateBuf[msgData["offset"]:msgData["offset"] + msgData["length"]] = msgData["data"]
-        if mode.networkDevice or mode.masterMode:  # send reply
+        if mode.masterMode:  # send reply
             replyFunction = b""
             if function == se.commands.PROT_CMD_SERVER_POST_DATA:  # performance data
                 # send ack
                 replyFunction = se.commands.PROT_RESP_ACK
                 replyData = b""
+                getInverterTime(msgData)
             elif function == 0x0503:  # encryption key
                 # send ack
                 replyFunction = se.commands.PROT_RESP_ACK
                 replyData = b""
             elif function == se.commands.PROT_CMD_SERVER_GET_GMT:  # time request
+                checkTimeSkew()
                 # set time
                 replyFunction = se.commands.PROT_RESP_SERVER_GMT
                 replyData = se.data.formatTime(int(time.time()),
@@ -111,13 +122,6 @@ def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
             if replyFunction:
                 msg = se.msg.formatMsg(msgSeq, toAddr, fromAddr, replyFunction, replyData)
                 se.msg.sendMsg(dataFile, msg, recFile)
-
-# write firmware image to file
-def writeUpdate(updateBuf, updateFileName):
-    updateBuf = b"".join(updateBuf)
-    logger.info("writing %s", updateFileName)
-    with open(updateFileName, "wb") as updateFile:
-        updateFile.write(updateBuf)
 
 # RS485 master commands thread
 def masterCommands(state, dataFile, recFile, slaveAddrs):
@@ -195,10 +199,12 @@ def startMaster(args):
     masterThread.start()
     logger.info("starting %s", MASTER_THREAD_NAME)
 
-# wait until keyboard interrupt
+# wait until keyboard interrupt (or the nadir, if enabled)
 def block(state):
     try:
         while True:
+            if nadirEpoch is not None and time.time() >= nadirEpoch:
+                terminate(0, "Nadir reached, exiting")
             time.sleep(1)
     except KeyboardInterrupt:
         se.logutils.dumpState(state)
@@ -217,6 +223,16 @@ def nextSeq():
         seqFile.write(str(seq) + "\n")
     return seq
 
+# Return the UNIX epoch timestamp for the next occurrence of a given
+# local time (nadir), whether that is later today or tomorrow.
+def nextNadirEpoch(nadir, now=None):
+    now = now or datetime.datetime.now()
+    target = datetime.datetime.combine(now.date(), nadir)
+    if now >= target:
+        # build tomorrow from the calendar date, not by adding 24h to the instant
+        target = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), nadir)
+    return target.timestamp()
+
 
 if __name__ == "__main__":
     # create the state variables with timestamps
@@ -230,11 +246,15 @@ if __name__ == "__main__":
     # get the command line arguments and run mode
     (args, mode) = se.env.getArgs()
 
+    # calculate the nadir once, only when enabled
+    if args.nadir is not None:
+        nadirEpoch = nextNadirEpoch(args.nadir)
+        logger.info("nadir at epoch %d (%s)", nadirEpoch,
+                    datetime.datetime.fromtimestamp(nadirEpoch).isoformat())
+
     # open the specified data source
     logger.info("opening %s", args.datasource)
-    if args.datasource == "network":
-        dataFile =  se.files.openDataSocket(args.ports)
-    elif mode.serialDevice:
+    if mode.serialDevice:
         dataFile =  se.files.openSerial(args.datasource, args.baudrate)
     else:
         dataFile =  se.files.openInFile(args.datasource)
@@ -250,14 +270,14 @@ if __name__ == "__main__":
         outFile = se.files.openOutFile(args.outfile, "ab" if args.append else "wb")
 
     # figure out what to do based on the mode of operation
-    if mode.passiveMode:  # only reading from file or serial device
+    if mode.passiveMode:  # only reading from file, stdin or RS485 serial device
         # read until eof then terminate
         readData(args, mode, state, dataFile, recFile, outFile)
-    else:  # reading and writing to network or serial device
+    else:  # reading and writing to the RS485 serial device
         if args.commands:  # commands were specified
             # perform commands then terminate
             doCommands(args, mode, state, dataFile, recFile, outFile)
-        else:  # interacting over network or RS485
+        else:  # interacting over RS485
             # start a separate thread for reading
             readThread = threading.Thread(
                 name=READ_THREAD_NAME,
@@ -272,5 +292,5 @@ if __name__ == "__main__":
             block(state)
 
     # cleanup
-    se.files.closeData(dataFile, mode.networkDevice)
+    se.files.closeData(dataFile)
     se.files.closeOutFiles(recFile, outFile)

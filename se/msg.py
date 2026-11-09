@@ -26,33 +26,19 @@ dataOutSeq = 0
 # return the next message
 def readMsg(inFile, recFile, mode, state):
     se.logutils.setState(state, "passiveMode", mode.passiveMode)
-    se.logutils.setState(state, "serialType", mode.serialType)
     global dataInSeq
     dataInSeq += 1
     msg = b""
     eof = False
-    if not mode.passiveMode and (mode.serialType != "4"):
-        # active mode that is not rs485
-        # read the magic number and header
-        msg = readBytes(inFile, recFile, magicLen + msgHdrLen, mode, state)
-        if not msg:   # end of file
-            return (msg, True)
-        (dataLen, dataLenInv, msgSeq, fromAddr, toAddr, function) = \
-            struct.unpack("<HHHLLH", msg[magicLen:])
-        # read the data and checksum
-        msg += readBytes(inFile, recFile, dataLen + checksumLen, mode, state)
-        msg = msg[magicLen:]    # strip the magic number from the beginning
-    else:
-        # passive mode or rs485
-        # read 1 byte at a time until the next magic number
-        while msg[-magicLen:] != magic:
-            nextByte = readBytes(inFile, recFile, 1, mode, state)
-            if not nextByte:  # end of file
-                eof = True
-                msg += magic  # append a magic number to end the loop
-            else:
-                msg += nextByte
-        msg = msg[:-magicLen]  # strip the magic number from the end
+    # read 1 byte at a time until the next magic number
+    while msg[-magicLen:] != magic:
+        nextByte = readBytes(inFile, recFile, 1, mode, state)
+        if not nextByte:  # end of file
+            eof = True
+            msg += magic  # append a magic number to end the loop
+        else:
+            msg += nextByte
+    msg = msg[:-magicLen]  # strip the magic number from the end
     if len(msg) > 0:  # don't log zero length messages
         logger.message("-->", dataInSeq, magic + msg, inFile.name)
     return (msg, eof)
