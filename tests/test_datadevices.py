@@ -416,7 +416,7 @@ def test_unrepresentable_time_stamp_is_reported_as_invalid(caplog, method):
         assert method(10**20) == "invalid"
 
     assert len(caplog.messages) == 1
-    assert caplog.messages[0].startswith(f"Invalid time stamp: {10**20} ")
+    assert caplog.messages[0].startswith(f"Invalid timestamp: {10**20} ")
 
 
 @pytest.mark.parametrize(
@@ -755,8 +755,8 @@ def test_meter_is_wrapped_by_type_id_and_record_type(record, label):
 
 
 UNRECOGNIZED_RECORD_TYPES = {
-    4: "4_UnrecognisedRecType",
-    0: "0_UnrecognisedRecType",
+    4: "4_UnrecognizedRecType",
+    0: "0_UnrecognizedRecType",
 }
 
 
@@ -908,8 +908,8 @@ def test_timestamp_that_cannot_be_formatted_gets_a_placeholder(
     assert dev[other] == plain[other]
     assert set(caplog.messages) == {
         (
-            f'"{plain["dateTime"]} is not a valid {what}, '
-            f'changed to "{placeholder}"'
+            f"'{plain['dateTime']}' is not a valid {what}, "
+            f"changed to '{placeholder}'"
         )
     }
 
@@ -1069,7 +1069,7 @@ def test_item_defs_describes_every_field_of_a_device():
     assert "ParseDevice_0x0030 / batteries_0x0030 parses data blocks" in text
     assert "seType = 0x0030." in text
     assert "batteryId" in text
-    assert "Identifier for this battery" in text
+    assert "identifier for this battery" in text
     assert "Derived items" not in text
 
 
@@ -1099,7 +1099,7 @@ def test_item_defs_of_base_class_describes_all_known_devices():
     assert f"seType = {0xFFFF:#06x}." in text
     assert "ParseDevice_0x0030 / batteries_0x0030 parses" in text
     assert "ParseDevice_0x0022 / meters_0x0022 parses" in text
-    assert "parses data blocks with any unrecognised seType" in text
+    assert "parses data blocks with any unrecognized seType" in text
 
 
 def test_item_defs_of_explorer_explains_how_it_works():
@@ -1107,7 +1107,7 @@ def test_item_defs_of_explorer_explains_how_it_works():
 
     assert text.startswith(
         f"\n\nParseDevice_Explorer / explore_{0xFFFF:#06x} parses data blocks"
-        " with any unrecognised seType."
+        " with any unrecognized seType."
     )
     assert "Item names are generated automatically" in text
 
@@ -1153,7 +1153,7 @@ def test_merge_update_overwrites_changed_value_and_logs_at_debug(caplog):
 
     assert master == {"a": {"x": 2}}
     assert [(r.name, r.levelno, r.getMessage()) for r in caplog.records] == [
-        (LOGGER, logging.DEBUG, "WARNING : For x about to overwrite 1 with 2")
+        (LOGGER, logging.DEBUG, "WARNING: For x about to overwrite 1 with 2")
     ]
 
 
@@ -1221,7 +1221,7 @@ def test_merge_of_a_repeated_device_updates_its_changed_fields(record, caplog):
     ]
     assert merged["E2X"] == new
     assert [m for m in caplog.messages if "E2X" in m] == [
-        f"WARNING : For E2X about to overwrite {old} with {new}"
+        f"WARNING: For E2X about to overwrite {old} with {new}"
     ]
 
 
