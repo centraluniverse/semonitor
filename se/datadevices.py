@@ -100,7 +100,7 @@ class ParseDevice(dict):
         devHdrLen = 8
         (seType, seId, devLen) = struct.unpack("<HLH", data[0:devHdrLen])
 
-        # Search for a subclass which can handle this seType
+        # Search for a subclass which can handle this se_type
         for subclass in cls.__subclasses__():
             if subclass._dev == seType:
                 return (subclass(data))
