@@ -214,14 +214,14 @@ class ParseDevice(dict):
             'devType': self.dev_type
         })
 
-        if self.defnLen > devLen:
+        if self.field_defs_len > devLen:
             raise ValueError(
                 'You have defined more bytes, {}, than the message contains, {}'.
-                format(self.defnLen, devLen))
-        elif self.defnLen < devLen:
+                format(self.field_defs_len, devLen))
+        elif self.field_defs_len < devLen:
             # By default, convert any remaining undefined bytes to their representation as a hexadecimal string.
             self.field_defs.append([
-                devLen - self.defnLen, 'hex', "Undeciphered_data",
+                devLen - self.field_defs_len, 'hex', "Undeciphered_data",
                 self.hexData, True, "Unknown as yet"
             ])
 
@@ -330,7 +330,8 @@ class ParseDevice(dict):
         return devItemNames
 
     @property
-    def defnLen(self):
+    def field_defs_len(self):
+        """The total number of bytes described by fieldDefs."""
         return sum([
             itemLen for itemLen, fmt, name, outFmt, out, comment in self.field_defs
         ])
@@ -654,7 +655,7 @@ class ParseDevice_Explorer(ParseDevice):
     dev_type = '{}_{:#06x}'.format(_devName, _dev)
     field_defs = []
     _itemNames = ["seType", "seId", "devLen", "devType"]
-    _defnLen = 0
+    _field_defs_len = 0
 
     def parseDevTable(self, data):
         """ A special exploratory parser, that works without a pre-defined list of itemNames and definitions. Somewhere
@@ -673,7 +674,7 @@ class ParseDevice_Explorer(ParseDevice):
          devLen) = struct.unpack("<HLH", data[dataPtr:dataPtr + devHdrLen])
 
         self._dev = seType
-        self._defnLen = devLen
+        self._field_defs_len = devLen
         # For standard subclasses, dev_type will already have this value.
         # However ParseDevice_Explorer can be used as a default parser, when a new device is encountered, in which case
         # the actual instance value of seType would be unknown when the seDataDevices module was imported (or in other
@@ -764,8 +765,9 @@ class ParseDevice_Explorer(ParseDevice):
         return cls._itemNames
 
     @property
-    def defnLen(self):
-        return self._defnLen
+    def field_defs_len(self):
+        """The byte length of the data block, from its header."""
+        return self._field_defs_len
 
     @classmethod
     def itemDefs(cls):
