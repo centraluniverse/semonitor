@@ -66,7 +66,7 @@ is the default method from `ParseDict` itself :
 
 ```python
     def wrap_in_ids(self):
-        return {self._devType: {self._seId : self}}
+        return {self.devType: {self._seId: self}}
 ```
 
 Subclasses which require additional identifiers simply define a
@@ -76,7 +76,7 @@ enough to need to distinguish attributes from more that one battery!),
 
 ```python
     def wrap_in_ids(self):
-        return {self._devType: {self._seId: {self["batteryId"]: self}}}
+        return {self.devType: {self._seId: {self["batteryId"]: self}}}
 ```
 
 All that seData.py then has to do is merge the "wrapped" dictionary of
@@ -225,7 +225,7 @@ For `ParseDevice` itself, these are essentially dummy placeholders :
 ```python
     _dev = 0xffff # dummy value, I hope.  Should be overwritten in subclasses.
     _devName = 'Unknown_device'
-    _devType = '{}_{:#06x}'.format(_devName, _dev)
+    devType = "{}_{:#06x}".format(_devName, _dev)
 ```
 
 For a subclass such as `ParseDevice_0x0030` they are more meaningful :
@@ -233,7 +233,7 @@ For a subclass such as `ParseDevice_0x0030` they are more meaningful :
 ```python
     _dev =0x0030
     _devName = 'batteries'
-    _devType = '{}_{:#06x}'.format(_devName, _dev)
+    devType = "{}_{:#06x}".format(_devName, _dev)
 ```
 
 `_dev` must match the `seType` that appears at the start of the data
@@ -242,18 +242,18 @@ block that the subclass can parse.
 `_devName` is an informative label used to make the `seType` more
 interpretable to humans, and
 
-`_devType` is a combination of the two that is used as part of the
+`devType` is a combination of the two that is used as part of the
 complete, fully qualified "name" of any field, when, for example, it is
 saved in json format or sent to graphite.
 
-### Defining fields : `ParseDevice._defn` and `ParseDevice.parseDevTable`
+### Defining fields : `ParseDevice.fieldDefs` and `ParseDevice.parseDevTable`
 
-`ParseDevice._defn` is the core component of the `ParseDevice`
+`ParseDevice.fieldDefs` is the core component of the `ParseDevice`
 class. It is a list of definitions of fields.
 
-`ParseDevice` itself does not define any fields, so `_defn = []`.
+`ParseDevice` itself does not define any fields, so `fieldDefs = []`.
 
-In general however, each field definition in `_defn` is itself a list,
+In general however, each field definition in `fieldDefs` is itself a list,
 consisting of exactly 6 entries.  The 6 entries are :
 
 1. **paramLen** - the length in bytes of the field.
@@ -298,10 +298,10 @@ consisting of exactly 6 entries.  The 6 entries are :
    the field.
 
 To help make this clearer, here is an extract from
-`ParseDevice_0x0030._defn` :
+`ParseDevice_0x0030.fieldDefs` :
 
 ```python
-    _defn = [
+    fieldDefs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to csv or graphite) True or False, comment]
         [4, 'L', "dateTime", "dateTime", False, "Seconds since the epoch"],
@@ -318,7 +318,7 @@ To help make this clearer, here is an extract from
 
 
 The `ParseDevice.parseDevTable` method is responsible for parsing a
-block of data using the definitions in `_defn` and storing the results
+block of data using the definitions in `fieldDefs` and storing the results
 as `name : value` entries in the ParseDevice dictionary.  It is called
 by `ParseDevice.__init__`.
 
@@ -348,17 +348,17 @@ code.  The hooks are :
 * `setDerivationDefaults`, and
 * `codeDerivations`
 
-`_derivn` is (essentially) a cut down version of `_defn`. It is a list
+`_derivn` is (essentially) a cut down version of `fieldDefs`. It is a list
 of (partial) definitions for new fields that are to be calculated and
 added to the `ParseDevice` dictionary, once all the data block fields
 have been read and parsed.  To be precise each definition of a derived
 field is a list with 4 elements, namely :
 
-1. **paramName** - as per `_defn`
+1. **paramName** - as per `fieldDefs`
 2. **paramDefault** - an initial default value for the field, typically
    `0`, `0.0`, `""` or `float("nan")`
-3. **out** (to csv) True or False - as per `_defn`
-4. **comment** - as per `_defn`
+3. **out** (to csv) True or False - as per `fieldDefs`
+4. **comment** - as per `fieldDefs`
 
 ```python
     _derivn = [
@@ -394,7 +394,7 @@ the relevant code from an earlier (since deleted) version of
 
 
 ```python
-    _defn = [
+    fieldDefs = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to csv or graphite) True or False, comment]
         [4, 'L', "dateTime", "dateTime", False, "Seconds since epoch"],
@@ -488,10 +488,50 @@ It wraps the `ParseDevice` (or subclass) dictionary inside a
 (inverters, batteries, optimisers etc.), and different instances of
 specific devices (optimiser1, optimiser2 etc) can be distinguished.
 
-The highest level wrapping should always be `self._devType`, but after
+The highest level wrapping should always be `self.devType`, but after
 that, subclasses can provide whatever additional wrappings they need
 to uniquely identify the specific device (inverter, battery, optimiser,
 etc).
+
+### The JSON lines of semonitor
+
+What `wrap_in_ids` builds is what semonitor.py writes as JSON, one line for
+every message with performance data, with sorted keys.  The highest level is
+the device type:
+
+```json
+{
+  "events": {},
+  "inverters": {
+    "7F104A16": {
+      "Date": "2016-01-01",
+      "ID": "7F104A16",
+      "Pac": 0.0,
+      "Time": "14:49:56"
+    }
+  },
+  "optimizers": {}
+}
+```
+
+(Shown wrapped, in semonitor.py's output it is a single line.)
+
+- `events`, `inverters` and `optimizers` are always there, and are `{}` when
+  empty.  Other devices have a section named after their type, such as
+  `batteries_0x0030`, `meters_0x0022` or `Unknown_device_0x0017`.
+- A section maps the device ID (the serial number, as upper case hexadecimal)
+  to the device.  Some devices have extra levels below their ID, such as
+  `meters_0x0022` / `7F1502EE` / `3_Consumption`.
+- The values of a device are in the innermost dictionary.  It always has a
+  `Date` (`YYYY-MM-DD`) and a `Time` (`HH:MM:SS`), in the time zone of the
+  inverter, and usually an `ID`.  This is how `unwrap_metricsDict` (below)
+  tells the values of a device from a level of nesting.
+- A device that is not decoded has its raw data as hexadecimal bytes in
+  `Undeciphered_data`, next to `dateTime` (seconds since the epoch), `devLen`,
+  `devType`, `seId` and `seType`.
+- Values are numbers or strings.  A value that is not valid is `NaN`, it is
+  not left out.  `NaN` is the only deviation from standard JSON, see the
+  README.
 
 ### `merge_update`
 
@@ -635,7 +675,7 @@ clearer :
 Initially, explanations and comments about fields that had been
 deciphered were kept (rather haphazardly) as Python comments in the code
 for subclasses of `ParseDevice`.  After a few iterations, I decided to
-make the field definitions (entries in `ParseDevice._defn`) self
+make the field definitions (entries in `ParseDevice.fieldDefs`) self
 documenting by incorporating an explicit **comment** in each
 definition.
 
@@ -801,9 +841,9 @@ special format "hex" if necessary to (temporarily) jump over sections of
 the data block which make little sense. At a minimum you must supply:
    * `_dev` (the `seType` to be parsed)
    * `_devName` (an informative name)
-   * `_devType` (I recommend `_devType = '{}_{:#06x}'.format(_devName, _dev)`
+   * `devType` (I recommend `devType = '{}_{:#06x}'.format(_devName, _dev)`
    and
-   * `_defn` (the list of field definitions)
+   * `fieldDefs` (the list of field definitions)
 5. Run semonitor.py over the pcap file again (you may as well set
 `ParseDevice(data, explorer=False)` once a draft subclass exists), save
 the json output, convert to csv, and start to look for values which are
