@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 """
-A very basic alternative to the (linux world's) syslog module, so I can test semonitor
-or a Windows machine without too much heartache.
+A very basic alternative to the (Linux world's) syslog module, so I can test semonitor
+on a Windows machine without too much heartache.
 
 Note that to see anything from this logger, a syslog server must be running, to capture and use the UDP packets sent
 by the SysLogHandler.
@@ -12,15 +13,17 @@ import logging
 import logging.handlers
 import os
 
+
 class TimedRotatingFileHandlerUmasked(
-        logging.handlers.TimedRotatingFileHandler):
+    logging.handlers.TimedRotatingFileHandler
+):
     """
     A modification of the logging.handlers.TimedRotatingFileHandler
 
     It uses os.umask to give the owner and group read and write permissions to the log files.
     _open (in the parent classes) is the hidden method which actually opens and creates new log files.
-    umask is a system level mask which contains the *bitwise negation* of the files permission mask.
-    eg (octal) 002 umask results in (octal) permission 775 - or rather (775 & the linux default), where the linux
+    umask is a system level mask which contains the *bitwise negation* of the file's permission mask.
+    e.g. (octal) 002 umask results in (octal) permission 775 - or rather (775 & the Linux default), where the Linux
     default for a file is 666, so the result is 775 & 666 = 664.
 
     See
@@ -36,7 +39,8 @@ class TimedRotatingFileHandlerUmasked(
         except:
             os.umask(prevUmask)
 
-my_logger = logging.getLogger('syslog')
+
+my_logger = logging.getLogger("syslog")
 my_logger.setLevel(logging.DEBUG)
 
 handler = logging.handlers.SysLogHandler()
@@ -46,7 +50,7 @@ handler = logging.handlers.SysLogHandler()
 #             backupCount=3)
 
 # Format each log message like this
-formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
 # Attach the formatter to the handler
 handler.setFormatter(formatter)
 # Attach the handler to the logger
@@ -56,7 +60,6 @@ my_logger.addHandler(handler)
 syslog = my_logger.info
 
 if __name__ == "__main__":
-
-    my_logger.debug('this is debug')
-    my_logger.critical('this is critical')
+    my_logger.debug("this is debug")
+    my_logger.critical("this is critical")
     syslog("This is an emulated syslog message")

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 # Utility to convert a debug log back into a binary data file.
 # The log must have been created by semonitor.py with the -vvvv option which
 # dumps the raw data.
@@ -18,4 +20,4 @@ except IndexError:
 
 for line in logFile:
     if line[0:5] == "data:":
-         dataFile.write(binascii.unhexlify(line[5:].replace(" ", "").strip()))
+        dataFile.write(binascii.unhexlify(line[5:].replace(" ", "").strip()))
