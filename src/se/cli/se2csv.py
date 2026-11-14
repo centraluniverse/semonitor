@@ -9,11 +9,11 @@ import csv
 from se.metrics import unwrap_metricsDict
 
 
-if __name__ == "__main__":
+def deprecated(s):
+    raise argparse.ArgumentTypeError("Deprecated option.")
 
-    def deprecated(s):
-        raise argparse.ArgumentTypeError("Deprecated option.")
 
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Read a file containing JSON performance data and output a separate comma-delimited file for each device type (e.g. inverter, optimizer, battery) encountered that is suitable for input to a spreadsheet.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         help="file containing performance data in JSON format",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     devsFile = {}
 
@@ -82,3 +82,7 @@ if __name__ == "__main__":
 
             devAttrs["__Identifier__"] = devId
             devsFile[devName].writerow(devAttrs)
+
+
+if __name__ == "__main__":
+    main()

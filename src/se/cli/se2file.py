@@ -8,9 +8,9 @@ from collections import OrderedDict
 import argparse
 
 
-def main():
+def main(argv=None):
     # parse the command line arguments
-    args = getargs()
+    args = getargs(argv)
 
     blank_max = 10  # Since we want to work on files and stdin. We will count the number of lines that are blank. If we process 10 blank lines and we are not doing stdin, we will assume that the file is done
     basedir = args.basedir
@@ -103,7 +103,7 @@ def main():
                 print("Looped %s times at %s" % (lreport, curstr))
 
 
-def getargs():
+def getargs(argv=None):
     parser = argparse.ArgumentParser(
         description="Write the output of semonitor.py, unprocessed, to JSON files named after the day and hour in which each message was received.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -161,7 +161,7 @@ def getargs():
         help="File to process, then exit; the default, stdin, reads piped data.",
     )
 
-    defargs = parser.parse_args()
+    defargs = parser.parse_args(argv)
     if defargs.looper == True and defargs.infile != "stdin":
         print(
             "Warning: wait forever (-w) only applies to stdin, not waiting for more data from the infile"

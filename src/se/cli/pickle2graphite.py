@@ -42,31 +42,8 @@ def log(*args):
     syslog.syslog(message)
 
 
-# parameter defaults
-base = ""
-hostName = "localhost"
-# Port must be the port which Graphite (carbon) has configured to be the pickle listener port.
-# The usual Graphite installation default is 2004.
-port = 2004
-devices = ["inverters", "optimizers"]
+# Time to wait, in seconds, after sending a batch (or for more data when following).
 delay = 0.2
-following = False
-
-# get program arguments and options
-(opts, args) = getopt.getopt(sys.argv[1:], "b:fh:p:")
-try:
-    inFile = open(args[0])
-except:
-    inFile = sys.stdin
-for opt in opts:
-    if opt[0] == "-b":
-        base = opt[1] + "."
-    if opt[0] == "-h":
-        hostName = opt[1]
-    if opt[0] == "-p":
-        port = int(opt[1])
-    if opt[0] == "-f":
-        following = True
 
 
 def getJsonStr(inFile, following):
@@ -143,7 +120,33 @@ class Pickle2Graphite(list):
         time.sleep(delay)
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    # parameter defaults
+    base = ""
+    hostName = "localhost"
+    # Port must be the port which Graphite (carbon) has configured to be the pickle listener port.
+    # The usual Graphite installation default is 2004.
+    port = 2004
+    following = False
+
+    # get program arguments and options
+    (opts, args) = getopt.getopt(
+        sys.argv[1:] if argv is None else argv, "b:fh:p:"
+    )
+    try:
+        inFile = open(args[0])
+    except:
+        inFile = sys.stdin
+    for opt in opts:
+        if opt[0] == "-b":
+            base = opt[1] + "."
+        if opt[0] == "-h":
+            hostName = opt[1]
+        if opt[0] == "-p":
+            port = int(opt[1])
+        if opt[0] == "-f":
+            following = True
+
     # Timeout if no connection after 10 seconds,
     #   in which case check that Graphite is running, and the hostName and port are correct.
     socket.setdefaulttimeout(10.0)
@@ -166,3 +169,7 @@ if __name__ == "__main__":
             )
         jsonStr = getJsonStr(inFile, following)
     graphiteSocket.close()
+
+
+if __name__ == "__main__":
+    main()

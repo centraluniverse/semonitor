@@ -314,7 +314,7 @@ class Se2Influx:
             raise DateError(e) from e
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv=None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description="Read semonitor.py output and write to an InfluxDB, and optionally a log file.",
@@ -398,11 +398,11 @@ def parse_args() -> argparse.Namespace:
         help="display debug-level log messages",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-if __name__ == "__main__":
-    args = parse_args()
+def main(argv=None):
+    args = parse_args(argv)
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s %(message)s",
         level=logging.DEBUG if args.debug else logging.INFO,
@@ -431,3 +431,7 @@ if __name__ == "__main__":
         args.stat_timer_secs,
     )
     se2influx.run()
+
+
+if __name__ == "__main__":
+    main()

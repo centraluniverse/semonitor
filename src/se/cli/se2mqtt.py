@@ -24,49 +24,57 @@ import time
 import sys
 import paho.mqtt.client as mqtt
 
-# state values
-stateDict = {"inverters": {}, "optimizers": {}}
 
-# get program arguments and options
-(opts, args) = getopt.getopt(sys.argv[1:], "c:u:p:s:t:")
-try:
-    inFile = open(args[0])
-except:
-    inFile = sys.stdin
-for opt in opts:
-    if opt[0] == "-c":
-        clientid = opt[1]
-    if opt[0] == "-u":
-        user = opt[1]
-    if opt[0] == "-p":
-        passwd = opt[1]
-    if opt[0] == "-s":
-        server = opt[1]
-    if opt[0] == "-t":
-        topic = opt[1]
+def main(argv=None):
+    # state values
+    stateDict = {"inverters": {}, "optimizers": {}}
 
-# read the input forever
-while True:
-    jsonStr = ""
-    # wait for data
-    while jsonStr == "":
-        time.sleep(0.1)
-        jsonStr = inFile.readline()
-    inDict = json.loads(jsonStr)
-    # update the state values
-    stateDict["inverters"].update(inDict["inverters"])
-    stateDict["optimizers"].update(inDict["optimizers"])
-    # zero current energy and power when an event occurs
-    if len(inDict["events"]) != 0:
-        for inverter in stateDict["inverters"].keys():
-            stateDict["inverters"][inverter]["Eac"] = 0.0
-            stateDict["inverters"][inverter]["Pac"] = 0.0
-    # send to MQTT
+    # get program arguments and options
+    (opts, args) = getopt.getopt(
+        sys.argv[1:] if argv is None else argv, "c:u:p:s:t:"
+    )
     try:
-        mqttc = mqtt.Client(client_id=clientid)
-        mqttc.username_pw_set(user, passwd)
-        mqttc.connect(server)
-        mqttc.publish(topic, json.dumps(stateDict))
-        mqttc.disconnect()
-    except Exception as ex:
-        print("MQTT Exception: " + str(ex))
+        inFile = open(args[0])
+    except:
+        inFile = sys.stdin
+    for opt in opts:
+        if opt[0] == "-c":
+            clientid = opt[1]
+        if opt[0] == "-u":
+            user = opt[1]
+        if opt[0] == "-p":
+            passwd = opt[1]
+        if opt[0] == "-s":
+            server = opt[1]
+        if opt[0] == "-t":
+            topic = opt[1]
+
+    # read the input forever
+    while True:
+        jsonStr = ""
+        # wait for data
+        while jsonStr == "":
+            time.sleep(0.1)
+            jsonStr = inFile.readline()
+        inDict = json.loads(jsonStr)
+        # update the state values
+        stateDict["inverters"].update(inDict["inverters"])
+        stateDict["optimizers"].update(inDict["optimizers"])
+        # zero current energy and power when an event occurs
+        if len(inDict["events"]) != 0:
+            for inverter in stateDict["inverters"].keys():
+                stateDict["inverters"][inverter]["Eac"] = 0.0
+                stateDict["inverters"][inverter]["Pac"] = 0.0
+        # send to MQTT
+        try:
+            mqttc = mqtt.Client(client_id=clientid)
+            mqttc.username_pw_set(user, passwd)
+            mqttc.connect(server)
+            mqttc.publish(topic, json.dumps(stateDict))
+            mqttc.disconnect()
+        except Exception as ex:
+            print("MQTT Exception: " + str(ex))
+
+
+if __name__ == "__main__":
+    main()

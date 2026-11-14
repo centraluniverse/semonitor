@@ -12,12 +12,21 @@
 import binascii
 import sys
 
-logFile = open(sys.argv[1])
-try:
-    datafile = open(sys.argv[2], "wb")
-except IndexError:
-    dataFile = sys.stdout
 
-for line in logFile:
-    if line[0:5] == "data:":
-        dataFile.write(binascii.unhexlify(line[5:].replace(" ", "").strip()))
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    logFile = open(args[0])
+    try:
+        datafile = open(args[1], "wb")
+    except IndexError:
+        dataFile = sys.stdout
+
+    for line in logFile:
+        if line[0:5] == "data:":
+            dataFile.write(
+                binascii.unhexlify(line[5:].replace(" ", "").strip())
+            )
+
+
+if __name__ == "__main__":
+    main()

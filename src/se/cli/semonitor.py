@@ -303,7 +303,9 @@ def nextNadirEpoch(nadir, now=None):
     return target.timestamp()
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    global nadirEpoch
+
     # create the state variables with timestamps
     state = {}
     se.logutils.setState(state, "readThread", False)
@@ -313,7 +315,7 @@ if __name__ == "__main__":
     se.logutils.setState(state, "masterEvent", False)
 
     # get the command line arguments and run mode
-    (args, mode) = se.env.getArgs()
+    (args, mode) = se.env.getArgs(argv)
 
     # calculate the nadir once, only when enabled
     if args.nadir == se.env.NADIR_EVENT:
@@ -371,3 +373,7 @@ if __name__ == "__main__":
     # cleanup
     se.files.closeData(dataFile)
     se.files.closeOutFiles(recFile, outFile)
+
+
+if __name__ == "__main__":
+    main()

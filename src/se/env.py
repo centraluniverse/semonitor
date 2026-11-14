@@ -39,7 +39,7 @@ class SeArgumentParser(argparse.ArgumentParser):
 
 
 # get arguments from the command line and validate them
-def getArgs():
+def getArgs(argv=None):
 
     # argument validation functions
     def validated_commands(command_str):
@@ -177,7 +177,7 @@ def getArgs():
         help="input filename or serial port",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # configure logging
     stream_formatter = logging.Formatter("%(message)s")
