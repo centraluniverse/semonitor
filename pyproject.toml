@@ -9,13 +9,26 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "semonitor"
 description = "Monitor SolarEdge inverters and optimizers"
-dynamic = ["dependencies", "version"]
+dynamic = ["version"]
 requires-python = ">=3.15"
+dependencies = ["pyserial==3.5"]
 
 [project.optional-dependencies]
 influx = ["influxdb"]
 mqtt = ["paho-mqtt<2"]
 all = ["semonitor[influx,mqtt]"]
+
+# Tooling, which is not part of semonitor, installed with `--group NAME`.
+# Deliberately unpinned, the nightly CI run will trigger this.
+[dependency-groups]
+dev = ["pre-commit"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-timeout",
+    "pytest-xdist",
+    "python-dateutil",
+]
 
 [project.scripts]
 debug2hex = "se.cli.debug2hex:main"
@@ -31,9 +44,6 @@ seprint = "se.cli.seprint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
 
 # The version is taken from the git tags, the same way as `git describe`.
 # Without git (e.g. a container build, where .git is not copied) set

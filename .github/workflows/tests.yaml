@@ -30,6 +30,7 @@ jobs:
         with:
           python-version-file: pyproject.toml
           cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install semonitor
         run: pip install .
@@ -61,6 +62,7 @@ jobs:
         with:
           python-version-file: pyproject.toml
           cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Run pytest
         run: ./run-tests.sh --cov-report html --cov-report xml --junitxml junit.xml

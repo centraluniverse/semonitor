@@ -34,7 +34,7 @@ if ! "${VENV}/bin/python" --version > '/dev/null' 2>&1; then
 	python3 -m venv --clear "${VENV}"
 fi
 "${VENV}/bin/python" -m pip install --quiet --upgrade pip
-"${VENV}/bin/python" -m pip install --quiet --upgrade --requirement 'requirements-dev.txt'
+"${VENV}/bin/python" -m pip install --quiet --upgrade --group 'dev'
 
 "${VENV}/bin/pre-commit" clean
 "${VENV}/bin/pre-commit" install --install-hooks
