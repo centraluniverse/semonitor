@@ -1,0 +1,11 @@
+.coverage
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+.venv/
+**/__pycache__/
+build/
+dist/
+test/
+tests/

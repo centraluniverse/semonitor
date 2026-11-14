@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Copyright (C) 2026 Olliver Schinagl <oliver@schinagl.nl>
+
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semonitor"
+description = "Monitor SolarEdge inverters and optimizers"
+dynamic = ["version"]
+requires-python = ">=3.15"
+dependencies = ["pyserial==3.5"]
+
+[project.optional-dependencies]
+influx = ["influxdb"]
+mqtt = ["paho-mqtt<2"]
+all = ["semonitor[influx,mqtt]"]
+
+# Tooling, which is not part of semonitor, installed with `--group NAME`.
+# Deliberately unpinned, the nightly CI run will trigger this.
+[dependency-groups]
+dev = ["pre-commit"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-timeout",
+    "pytest-xdist",
+    "python-dateutil",
+]
+
+[project.scripts]
+debug2hex = "se.cli.debug2hex:main"
+pickle2graphite = "se.cli.pickle2graphite:main"
+se2csv = "se.cli.se2csv:main"
+se2file = "se.cli.se2file:main"
+se2graphite = "se.cli.se2graphite:main"
+se2influx = "se.cli.se2influx:main"
+se2mqtt = "se.cli.se2mqtt:main"
+se2state = "se.cli.se2state:main"
+semonitor = "se.cli.semonitor:main"
+seprint = "se.cli.seprint:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The version is taken from the git tags, the same way as `git describe`.
+# Without git (e.g. a container build, where .git is not copied) set
+# SETUPTOOLS_SCM_PRETEND_VERSION, or the fallback version is used.
+[tool.setuptools_scm]
+fallback_version = "0+unknown"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--durations=10",
+    "--durations-min=0.5",
+    "--dist=worksteal",
+    "--numprocesses=auto",
+    "--strict-config",
+    "--strict-markers",
+]
+testpaths = ["tests"]
+timeout = 120
+
+[tool.coverage.run]
+branch = true
+patch = ["subprocess"]
+source = ["src"]
+omit = [
+    "*/.git/*",
+    "*/.venv/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.codespell]
+builtin = "clear,rare,en-GB_to_en-US"
+skip = "*.csv,*.json,*.md,*.msg,*.pcap,*.rec,LICENSE"
+ignore-regex = '\bcancelled\(\)'  # GitHub Actions spells it as `cancelled()`.
+
+[tool.ruff]
+line-length = 80
+extend-exclude = ["test"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps at 80; E501 only flags lines beyond 120.
+max-line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+# The tests read the pickles that the script they test made itself.
+"tests/**" = ["S301"]
+
+[tool.ruff.format]
