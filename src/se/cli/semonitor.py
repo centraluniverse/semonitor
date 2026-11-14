@@ -5,6 +5,7 @@ import datetime
 import threading
 import sys
 import struct
+import se.clock
 import se.env
 import se.logutils
 import se.files
@@ -314,6 +315,13 @@ def main(argv=None):
 
     # get the command line arguments and run mode
     (args, mode) = se.env.getArgs(argv)
+
+    # do not read, and so not write, data with a time that is not valid yet
+    if mode.serialDevice:
+        try:
+            se.clock.waitForValidTime()
+        except se.clock.ClockError as ex:
+            terminate(1, str(ex))
 
     # calculate the nadir once, only when enabled
     if args.nadir == se.env.NADIR_EVENT:

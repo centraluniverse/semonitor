@@ -190,6 +190,12 @@ packages to run. Select these with an extra, for example
 `pip install ".[influx]"` for `se2influx`, or `".[mqtt]"` for `se2mqtt`.
 To install everything, use `pip install ".[all]"`.
 
+To run semonitor as a service on systemd, copy
+`packaging/systemd/semonitor.service` to `/etc/systemd/system/`, set the
+`INVERTERS` there, or in `/etc/default/semonitor`, and enable it. The service
+starts once the time is synchronized, is started again after `semonitor` exits
+at the end of the day (`-n`), and writes its data into `/var/lib/semonitor`.
+
 
 ## How to use it
 
@@ -317,6 +323,16 @@ exit is intended to be paired with a restarting supervisor, such as systemd
 with `Restart=always` or a docker restart policy, which starts `semonitor`
 again for the next day. Use `__date__` or `__datetime__` in the `-o` and `-r`
 names to get a new file for each day.
+
+When reading from a serial device, `semonitor` first waits until the time of
+the system is valid. It provides the time to the inverter and uses it in what
+it writes, which matters on a device without a battery backed clock, that has
+to synchronize its time first. The time has to be later than the one in the
+`SE_START_EPOCH` environment variable, which is a UNIX epoch or an ISO 8601
+date and time, such as `1735689600`, `2025-01-01` or `2025-01-01T12:00Z`.
+Without it, the time the program was installed is used. It waits for
+`SE_START_TIMEOUT` seconds, 60 when not set, checking a little less often
+every time, and then exits with an error.
 
 Debug messages are sent to the system log, unless the `-d` option is specified.
 If an error occurs while processing data, the program will log a message and

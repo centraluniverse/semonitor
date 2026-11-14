@@ -9,8 +9,8 @@ INFLUX_USER='semonitor'
 INFLUX_PASS='XXXXXXXXX'
 SEMONITOR_LOG='/var/log/semonitor/semonitor.log'
 
-/usr/local/bin/solaredge/semonitor.py -m -t 4 -s "${INVERTERS}" "${USB_DEVICE}" | \
-  /usr/local/bin/solaredge/utilities/se2influx.py \
+semonitor -m -t 4 -s "${INVERTERS}" "${USB_DEVICE}" | \
+  se2influx \
     --host "${INFLUX_HOST}" \
     --username "${INFLUX_USER}" \
     --password "${INFLUX_PASS}" \

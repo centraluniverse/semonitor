@@ -150,7 +150,7 @@ def test_help_lists_the_defaults(parse, capsys):
 
 def test_the_options_of_the_wrapper_script_are_all_accepted(parse):
     text = WRAPPER.read_text()
-    command = text[text.index("se2influx.py") + len("se2influx.py") :]
+    command = text[text.index("se2influx") + len("se2influx") :]
     command = command.split("\n\n")[0].replace("\\\n", " ").splitlines()[0]
     tokens = [
         "x" if token.startswith("$") else token
