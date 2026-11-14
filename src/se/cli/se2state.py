@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Maintain a file containing the current state and selected statistics
 # of SolarEdge inverters and optimizers
 

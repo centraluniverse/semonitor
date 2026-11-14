@@ -34,6 +34,7 @@ if ! "${VENV}/bin/python" --version > '/dev/null' 2>&1; then
 fi
 "${VENV}/bin/python" -m pip install --quiet --upgrade pip
 "${VENV}/bin/python" -m pip install --quiet --upgrade --requirement 'requirements-test.txt'
+"${VENV}/bin/python" -m pip install --quiet --editable '.'
 
 set -- --cov --cov-report 'term-missing:skip-covered' "${@}"
 
