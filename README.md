@@ -732,4 +732,82 @@ arguments to `pytest`.
 ```
 
 
+### Manual End-to-End Testing
+
+All containers below run with unauthenticated access, and web UIs for inspecting incoming telemetry.
+
+
+#### Start Local Services & Web UIs
+
+
+##### MQTT Broker (port 1883, no auth) + MQTT Explorer Web UI (<http://localhost:4000>)
+
+```sh
+docker run -d --rm --name se-mqtt -p 1883:1883 \
+  docker.io/library/eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf
+
+docker run -d --rm --name se-mqtt-ui \
+  --add-host=host.docker.internal:host-gateway \
+  -p 4000:4000 docker.io/smeagolworms4/mqtt-explorer
+```
+
+
+##### Graphite (Carbon TCP port 2003) + Built-in Graphite Web UI (<http://localhost:8080>)
+
+```sh
+docker run -d --rm --name se-graphite \
+  -p 2003:2003 -p 8080:80 \
+  docker.io/graphiteapp/graphite-statsd
+```
+
+
+##### InfluxDB 1.8 (port 8086, no auth) + Chronograf Web UI (<http://localhost:8888>)
+
+```sh
+docker run -d --rm --name se-influxdb -p 8086:8086 \
+  -e INFLUXDB_DB=solaredge \
+  -e INFLUXDB_HTTP_AUTH_ENABLED=false \
+  docker.io/library/influxdb:1.8
+
+docker run -d --rm --name se-influx-ui \
+  --add-host=host.docker.internal:host-gateway \
+  -p 8888:8888 docker.io/library/chronograf:1.10 --influxdb-url=[http://host.docker.internal:8086](http://host.docker.internal:8086)
+```
+
+> **Note**: `influxdb:1.8` + `chronograf` avoids InfluxDB 2.x's mandatory
+> interactive setup and token generation while matching the InfluxDB
+> v1 write API.)
+
+
+##### Fan Out `semonitor` JSON via `pee`
+
+Use `pee` (from the `moreutils` package) to pipe `stdout` concurrently to every consumer without temporary files, named pipes, or shell-specific syntax:
+
+```sh
+python3 semonitor.py <your-semonitor-args> | pee \
+  "python3 se2MQTT.py -c solaredge -u dummy -p dummy -s localhost -t /ha/value/solaredge" \
+  "python3 se2graphite.py -s localhost -p 2003 -t solaredge" \
+  "python3 se2influxdb.py -s localhost -P 8086 -u root -p root -d solaredge" \
+  "python3 se2state.py" \
+  "cat"
+```
+
+* **Live terminal output:** `"cat"` mirrors the JSON stream to your console; remove `"cat"` to run quietly.
+* **Dummy credentials:** Even with anonymous access enabled on Mosquitto and InfluxDB, the consumer scripts require `-u` and `-p` flags to be populated.
+* **CLI flags:** Verify exact option flags with `--help` on `se2graphite.py` and `se2influxdb.py` if their argument parsers have changed.
+
+
+#### Inspect Data & Clean Up
+
+* **MQTT:** Open `http://localhost:4000`, enter host `host.docker.internal` (port `1883`, no username/password), and click **Connect**.
+* **Graphite:** Open `http://localhost:8080` and expand `Metrics -> solaredge` in the left tree.
+* **InfluxDB:** Open `http://localhost:8888` and go to **Explore** to query the `solaredge` database.
+
+Stop and wipe all containers when finished:
+
+```sh
+docker stop se-mqtt se-mqtt-ui se-graphite se-influxdb se-influx-ui
+```
+
+
 [pytest]: https://docs.pytest.org/
