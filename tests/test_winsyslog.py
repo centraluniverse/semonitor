@@ -9,9 +9,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = (
-    Path(__file__).resolve().parent.parent / "conversion" / "seWindowsSyslog.py"
-)
+SCRIPT = Path(__file__).resolve().parent.parent / "src" / "se" / "winsyslog.py"
 
 
 # The hook that logging calls to open the file of the handler.
@@ -22,7 +20,11 @@ def open_stream(handler):
 # Load the module, with its logging set up thrown away afterwards. The module
 # sends its messages with a SysLogHandler, which, by default, wants a unix
 # socket at /dev/log, which is not there in a test.
-@pytest.fixture(autouse=True)
+# the /dev/log socket is replaced by a recorder
+pytestmark = pytest.mark.usefixtures("module")
+
+
+@pytest.fixture
 def module(monkeypatch):
     sockets = []
 
@@ -52,7 +54,7 @@ def module(monkeypatch):
     handlers = logger.handlers[:]
     level = logger.level
     spec = importlib.util.spec_from_file_location(
-        "seWindowsSyslog_under_test", SCRIPT
+        "winsyslog_under_test", SCRIPT
     )
     loaded = importlib.util.module_from_spec(spec)
     try:

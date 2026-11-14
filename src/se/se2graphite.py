@@ -8,11 +8,11 @@ import socket
 import sys
 import time
 
-from common import open_input, unwrap_metrics_dict
+from se.metrics import open_input, unwrap_metrics_dict
 
 if sys.platform == "win32":  # pragma: no cover, needs Windows
     # syslog is not available on Windows
-    import seWindowsSyslog as syslog
+    from se import winsyslog as syslog
 else:
     import syslog
 
