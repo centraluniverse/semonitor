@@ -24,13 +24,13 @@ import sys
 import socket
 import struct
 import pickle
-from common import unwrap_metricsDict
+from se.metrics import unwrap_metricsDict
 
 try:
     import syslog
 except ImportError:
     # Allow for the fact that syslog is not (to my knowledge) available on Windows
-    import seWindowsSyslog as syslog
+    from se import winsyslog as syslog
 
 
 # log a message to syslog

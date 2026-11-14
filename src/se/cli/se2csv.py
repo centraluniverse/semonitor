@@ -6,7 +6,7 @@ import json
 import argparse
 import csv
 
-from common import unwrap_metricsDict
+from se.metrics import unwrap_metricsDict
 
 
 if __name__ == "__main__":

@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-CONVERSION = Path(__file__).resolve().parent.parent / "conversion"
-SCRIPT = CONVERSION / "se2state.py"
+CLI = Path(__file__).resolve().parent.parent / "src" / "se" / "cli"
+SCRIPT = CLI / "se2state.py"
 
 
 class InputExhausted(BaseException):

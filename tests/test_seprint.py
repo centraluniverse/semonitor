@@ -6,7 +6,9 @@ import sys
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parent.parent / "utilities" / "seprint.py"
+SCRIPT = (
+    Path(__file__).resolve().parent.parent / "src" / "se" / "cli" / "seprint.py"
+)
 
 
 def run_seprint(monkeypatch, *args, stdin=""):

@@ -15,14 +15,14 @@ addopts = [
     "--strict-config",
     "--strict-markers",
 ]
-pythonpath = ["."]
+pythonpath = ["src"]
 testpaths = ["tests"]
 timeout = 120
 
 [tool.coverage.run]
 branch = true
 patch = ["subprocess"]
-source = ["."]
+source = ["src"]
 omit = [
     "*/.git/*",
     "*/.venv/*",

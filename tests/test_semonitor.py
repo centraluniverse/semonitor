@@ -22,7 +22,7 @@ import se.msg
 from .conftest import GOLDEN_DIR, SAMPLES
 
 ROOT = Path(__file__).resolve().parent.parent
-SEMONITOR = ROOT / "semonitor.py"
+SEMONITOR = ROOT / "src" / "se" / "cli" / "semonitor.py"
 
 MAGIC = se.msg.magic
 MASTER_ADDR = 0xFFFFFFFE

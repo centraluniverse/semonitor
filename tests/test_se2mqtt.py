@@ -8,8 +8,8 @@ from typing import ClassVar
 
 import pytest
 
-CONVERSION = Path(__file__).resolve().parent.parent / "conversion"
-SCRIPT = CONVERSION / "se2MQTT.py"
+CLI = Path(__file__).resolve().parent.parent / "src" / "se" / "cli"
+SCRIPT = CLI / "se2mqtt.py"
 ALL_OPTIONS = (
     "-c",
     "client",
