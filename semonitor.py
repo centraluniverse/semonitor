@@ -419,7 +419,14 @@ def next_nadir_epoch(nadir, now=None):
     return target if target > now else at(today.tm_mday + 1)
 
 
-def main():
+def main(argv=None):
+    """
+    Run semonitor with the arguments argv, or those of the process.
+
+    Reads the data from a file or serial device, writes the performance data
+    as JSON, and can send commands or act as an RS485 master. In the last two
+    cases it runs until it is interrupted, or until the nadir.
+    """
     # create the state variables with timestamps
     state = {}
     se.logutils.set_state(state, "readThread", value=False)
@@ -429,7 +436,7 @@ def main():
     se.logutils.set_state(state, "masterEvent", value=False)
 
     # get the command line arguments and run mode
-    (args, mode) = se.env.get_args()
+    (args, mode) = se.env.get_args(argv)
 
     # do not read, and so not write, data with a time that is not valid yet
     if mode.serial_device:
