@@ -373,7 +373,7 @@ class ParseDevice(dict):
 
     @property
     def field_defs_len(self):
-        """The total number of bytes described by fieldDefs."""
+        """The total number of bytes described by field_defs."""
         return sum(
             [
                 itemLen
