@@ -11,10 +11,10 @@ pickles it, adds the requisite header, and sends it to Graphite.
 
 You may need to adjust the delay parameter, depending upon the capacity and busyness of the Graphite server. I have
 found 0.2 works fine **for me** in production mode, when I am "following" some existing metrics in real time, as the
-SolarEdge inverter emits them, but I needed to increase it to as much as 5.0 the first time I sent a new batch of metrics
-to Graphite, otherwise the carbon listener seemed to be swamped and didn't have time to create all the new metrics.
-To be completely precise, I had problems when I sent an existing batch of metrics to a new "test" base, which meant
-Graphite / carbon had to create a whole lot of new whisper files all at once.
+SolarEdge inverter emits them, but I needed to increase it to as much as 5.0 the first time I sent a new batch of
+metrics to Graphite, otherwise the carbon listener seemed to be swamped and didn't have time to create all the new
+metrics. To be completely precise, I had problems when I sent an existing batch of metrics to a new "test" base, which
+meant Graphite / carbon had to create a whole lot of new whisper files all at once.
 """
 
 import getopt
@@ -35,8 +35,8 @@ except ImportError:
     import seWindowsSyslog as syslog
 
 
-# log a message to syslog
 def log(*args):
+    """Log a message, made of the space separated arguments, to syslog."""
     message = args[0] + " "
     for arg in args[1:]:
         message += arg.__str__() + " "
@@ -69,6 +69,18 @@ for opt in opts:
 
 
 def getJsonStr(inFile, following):
+    """
+    Read the next line of JSON from the input.
+
+    If following is True, wait (sleeping for delay seconds between tries) until a line arrives.
+
+    Args:
+        inFile: The open input file to read from.
+        following: Whether to keep waiting for new data at end of file.
+
+    Returns:
+        The line read, or an empty string at end of file when not following.
+    """
     jsonStr = inFile.readline()
     if jsonStr == "" and following:
         while jsonStr == "":
@@ -80,11 +92,20 @@ def getJsonStr(inFile, following):
 
 class Pickle2Graphite(list):
     """
-    Convert a (json) nested dictionary of dictionaries of metrics into the list of tuples format expected by the
-    Graphite (carbon) pickle interface and send them off to carbon's pickle listener port.
+    Convert a nested dictionary of metrics into the list of tuples Graphite needs.
+
+    The list of tuples is in the format expected by the Graphite (carbon) pickle interface, ready to be sent to
+    carbon's pickle listener port.
     """
 
     def __init__(self, metricsDict, base):
+        """
+        Build the list of (name, (timestamp, value)) tuples from metricsDict.
+
+        Args:
+            metricsDict: A nested dictionary of devices and their attributes, as produced by json.loads.
+            base: A prefix to put in front of every metric name.
+        """
         for baseName, devAttrs in unwrap_metricsDict(metricsDict):
             # convert date and time to Unix time
             try:
@@ -114,7 +135,8 @@ class Pickle2Graphite(list):
             for devAttr in devAttrs:
                 if devAttr not in {"Date", "Time", "Undeciphered_data"}:
                     try:
-                        # Weed out attributes with non numeric values (Graphite does this too, but why clog the network?)
+                        # Weed out attributes with non numeric values (Graphite does this too, but why clog the
+                        # network?)
                         test = float(devAttrs[devAttr])
                         if math.isnan(test):
                             # It's a NaN!
@@ -130,7 +152,15 @@ class Pickle2Graphite(list):
                         pass
 
     def send(self, graphiteSocket):
-        # Remove the non list attributes from self, to keep graphite (actually the carbon listener) happy.
+        """
+        Pickle the metrics and send them to the Graphite socket.
+
+        Only the list items are pickled, so that the non list attributes of self do not upset carbon.
+        A short delay follows each send so that carbon is not swamped.
+
+        Args:
+            graphiteSocket: A connected socket to the carbon pickle listener.
+        """
         payload = pickle.dumps(list(self))
         header = struct.pack("!L", len(payload))
         # print len(payload)

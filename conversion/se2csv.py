@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-
-# Convert SolarEdge inverter performance monitoring data from JSON to CSV
+"""Convert SolarEdge inverter performance monitoring data from JSON to CSV."""
 
 import argparse
 import contextlib
@@ -13,11 +12,17 @@ from common import unwrap_metricsDict
 if __name__ == "__main__":
 
     def deprecated(_s):
+        """Reject a deprecated command line option with an error."""
         msg = "Deprecated option."
         raise argparse.ArgumentTypeError(msg)
 
     parser = argparse.ArgumentParser(
-        description="Read a file containing JSON performance data and output a separate comma-delimited file for each device type (e.g. inverter, optimizer, battery) encountered that is suitable for input to a spreadsheet.",
+        description=(
+            "Read a file containing JSON performance data and output a "
+            "separate comma-delimited file for each device type (e.g. "
+            "inverter, optimizer, battery) encountered that is suitable for "
+            "input to a spreadsheet."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

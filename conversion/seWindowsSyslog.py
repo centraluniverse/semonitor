@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-A very basic alternative to the (Linux world's) syslog module, so I can test semonitor
-on a Windows machine without too much heartache.
+A very basic alternative to the (Linux world's) syslog module.
 
-Note that to see anything from this logger, a syslog server must be running, to capture and use the UDP packets sent
-by the SysLogHandler.
+It lets me test semonitor on a Windows machine without too much heartache.
 
-For testing purposes on Windows, just start the Tiny Python Syslog server in another window before running semonitor.
+Note that to see anything from this logger, a syslog server must be running, to
+capture and use the UDP packets sent by the SysLogHandler.
+
+For testing purposes on Windows, just start the Tiny Python Syslog server in
+another window before running semonitor.
 """
 
 import logging
@@ -18,19 +20,27 @@ class TimedRotatingFileHandlerUmasked(
     logging.handlers.TimedRotatingFileHandler
 ):
     """
-    A modification of the logging.handlers.TimedRotatingFileHandler
+    A modification of the logging.handlers.TimedRotatingFileHandler.
 
-    It uses os.umask to give the owner and group read and write permissions to the log files.
-    _open (in the parent classes) is the hidden method which actually opens and creates new log files.
-    umask is a system level mask which contains the *bitwise negation* of the file's permission mask.
-    e.g. (octal) 002 umask results in (octal) permission 775 - or rather (775 & the Linux default), where the Linux
-    default for a file is 666, so the result is 775 & 666 = 664.
+    It uses os.umask to give the owner and group read and write permissions to
+    the log files. _open (in the parent classes) is the hidden method which
+    actually opens and creates new log files. umask is a system level mask which
+    contains the *bitwise negation* of the file's permission mask. e.g. (octal)
+    002 umask results in (octal) permission 775 - or rather (775 & the Linux
+    default), where the Linux default for a file is 666, so the result is 775 &
+    666 = 664.
 
     See
     http://stackoverflow.com/questions/1407474/does-python-logging-handlers-rotatingfilehandler-allow-creation-of-a-group-writa
     """
 
     def _open(self):
+        """
+        Open the log file with a group-writable umask.
+
+        Returns:
+            The opened stream of the log file.
+        """
         prevUmask = os.umask(0o002)
         try:
             return super()._open()
@@ -43,8 +53,10 @@ my_logger.setLevel(logging.DEBUG)
 
 handler = logging.handlers.SysLogHandler()
 
-# An alternative could be to make a handler that writes to a file, making a new file at midnight and keeping 3 backups
-# handler = TimedRotatingFileHandlerUmasked("logFiles/{}.rotating.log".format(logFileName), when="midnight",
+# An alternative could be to make a handler that writes to a file, making a new
+# file at midnight and keeping 3 backups
+# handler = TimedRotatingFileHandlerUmasked("logFiles/{}.rotating.log"
+#     .format(logFileName), when="midnight",
 #             backupCount=3)
 
 # Format each log message like this

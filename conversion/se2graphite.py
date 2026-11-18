@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-
-# send SolarEdge performance metrics to Graphite
+"""Send SolarEdge performance metrics to Graphite."""
 
 import getopt
 import json
@@ -18,8 +17,8 @@ except ImportError:
     import seWindowsSyslog as syslog
 
 
-# log a message to syslog
 def log(*args):
+    """Log a message, made of the space separated arguments, to syslog."""
     message = args[0] + " "
     for arg in args[1:]:
         message += arg.__str__() + " "
@@ -88,7 +87,8 @@ if __name__ == "__main__":
                 for devAttr in devAttrs:
                     if devAttr not in {"Date", "Time", "Undeciphered_data"}:
                         try:
-                            # Weed out attributes with non numeric values (Graphite does this too, but why clog the network?)
+                            # Weed out attributes with non numeric values (Graphite does this too, but why clog the
+                            # network?)
                             test = float(devAttrs[devAttr])
                             if math.isnan(test):
                                 # It's a NaN!

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Write the output of semonitor.py, unprocessed, to JSON files."""
 
 import argparse
 import contextlib
@@ -8,8 +9,13 @@ import time
 from pathlib import Path
 
 
-# open the file to read from, which stays open until files is closed
 def _open_input(args, files):
+    """
+    Open the file to read from, which stays open until files is closed.
+
+    Returns sys.stdin when the input is "stdin". Exits with status 1 if the
+    file cannot be opened.
+    """
     if args.infile == "stdin":
         return sys.stdin
     try:
@@ -19,8 +25,13 @@ def _open_input(args, files):
         sys.exit(1)
 
 
-# the name of the file to write to, in a directory per day if asked for
 def _output_path(args, curtime):
+    """
+    Return the path of the JSON file to write the message at curtime to.
+
+    The file is named after the day, or the hour, of curtime. A directory per
+    day is created under basedir when make_daily_dir is set.
+    """
     curday = curtime.strftime("%Y-%m-%d")
     curhour = curtime.strftime("%Y-%m-%d-%H")
     curstore = curday if args.store_daily else curhour
@@ -33,10 +44,13 @@ def _output_path(args, curtime):
 
 
 def main():
+    """Copy semonitor output lines into JSON files named by day and hour."""
     # parse the command line arguments
     args = getargs()
 
-    blank_max = 10  # Since we want to work on files and stdin. We will count the number of lines that are blank. If we process 10 blank lines and we are not doing stdin, we will assume that the file is done
+    # Since we want to work on files and stdin. We will count the number of lines that are blank. If we process 10 blank
+    # lines and we are not doing stdin, we will assume that the file is done
+    blank_max = 10
     debug = args.debug
     openfilesecs = int(args.openfilesecs)
     # We always set looper = False for files, even if the args set it to true.
@@ -82,11 +96,10 @@ def main():
                 blank_cnt += 1
                 time.sleep(0.5)
             # Let's not leave output files open if we haven't seen data in a while
-            if curepoch - lastwrite > openfilesecs:
-                if debug:
-                    sys.stderr.write(
-                        f"No data for {openfilesecs} seconds, closing file\n"
-                    )
+            if curepoch - lastwrite > openfilesecs and debug:
+                sys.stderr.write(
+                    f"No data for {openfilesecs} seconds, closing file\n"
+                )
             # Keep track of when we are looping and report on it if debug is enabled.
             lreport = 60
             if lcnt % lreport == 0:
@@ -98,8 +111,12 @@ def main():
 
 
 def getargs():
+    """Parse and return the command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Write the output of semonitor.py, unprocessed, to JSON files named after the day and hour in which each message was received.",
+        description=(
+            "Write the output of semonitor.py, unprocessed, to JSON files "
+            "named after the day and hour in which each message was received."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -139,14 +156,22 @@ def getargs():
         dest="looper",
         default=False,
         action="store_true",
-        help="Wait forever for data on stdin, e.g. for a live semonitor.py; only applies when infile is stdin; without it, exit gracefully after 10 failed reads from stdin, so that piping in a file with cat returns.",
+        help=(
+            "Wait forever for data on stdin, e.g. for a live semonitor.py; "
+            "only applies when infile is stdin; without it, exit gracefully "
+            "after 10 failed reads from stdin, so that piping in a file with "
+            "cat returns."
+        ),
     )
     parser.add_argument(
         "-m",
         dest="make_daily_dir",
         default=False,
         action="store_true",
-        help="Create a directory per day (YYYY-MM-DD) for the files; otherwise all files go into the base directory (-b).",
+        help=(
+            "Create a directory per day (YYYY-MM-DD) for the files; "
+            "otherwise all files go into the base directory (-b)."
+        ),
     )
     parser.add_argument(
         "infile",
