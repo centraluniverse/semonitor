@@ -3,6 +3,7 @@ import functools
 import json
 import logging
 import math
+import operator
 import struct
 import time
 
@@ -531,6 +532,58 @@ def test_unknown_device_is_wrapped_by_type_and_id(record):
 
     assert wrapped == {dev["devType"]: {dev["seId"]: dev}}
     assert wrapped[dev["devType"]][dev["seId"]] is dev
+
+
+@pytest.mark.parametrize("record", UNKNOWN)
+def test_devices_parsed_from_the_same_record_are_equal(record):
+    dev = ParseDevice(record)
+    same = ParseDevice(record)
+
+    assert operator.eq(dev, same)
+    assert not operator.ne(dev, same)
+    assert operator.eq(dev, dict(dev))
+    assert operator.eq(dict(dev), dev)
+
+
+def test_devices_with_a_different_type_or_id_are_not_equal():
+    record = UNKNOWN[0].values[0]
+    dev = ParseDevice(record)
+    other_type = ParseDevice(record)
+    other_type.dev_type = "other_0x0018"
+    other_id = ParseDevice(record)
+    vars(other_id)["_seId"] = "0"
+
+    assert operator.ne(dev, other_type)
+    assert operator.ne(dev, other_id)
+    assert not operator.eq(dev, other_type)
+
+
+def test_devices_are_not_hashable():
+    with pytest.raises(TypeError):
+        hash(ParseDevice(UNKNOWN[0].values[0]))
+
+
+def test_explorer_devices_from_the_same_record_are_equal():
+    record = UNKNOWN[0].values[0]
+    dev = ParseDevice(record, explorer=True)
+    same = ParseDevice(record, explorer=True)
+
+    assert operator.eq(dev, same)
+    assert not operator.ne(dev, same)
+    assert operator.eq(dev, dict(dev))
+    with pytest.raises(TypeError):
+        hash(dev)
+
+
+@pytest.mark.parametrize("attribute", ["se_type", "_field_defs_len"])
+def test_explorer_devices_with_a_different_attribute_are_not_equal(attribute):
+    record = UNKNOWN[0].values[0]
+    dev = ParseDevice(record, explorer=True)
+    other = ParseDevice(record, explorer=True)
+    vars(other)[attribute] = -1
+
+    assert operator.ne(dev, other)
+    assert not operator.eq(dev, other)
 
 
 def test_base_class_has_no_exported_items():
