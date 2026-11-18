@@ -27,7 +27,7 @@ def make_file(data=b""):
 
 
 def frame(seq=1, data=b"", function=FUNCTION):
-    return bytes(se.msg.formatMsg(seq, SRC, DST, function, data))
+    return bytes(se.msg.format_msg(seq, SRC, DST, function, data))
 
 
 def corrupt(msg, index, mask):
@@ -38,10 +38,10 @@ def corrupt(msg, index, mask):
 
 def run_mode(*, passive, serial_type=None, following=False):
     return se.env.RunMode(
-        serialDevice=True,
-        serialType=serial_type,
-        passiveMode=passive,
-        masterMode=not passive,
+        serial_device=True,
+        serial_type=serial_type,
+        passive_mode=passive,
+        master_mode=not passive,
         following=following,
     )
 
@@ -67,7 +67,7 @@ def read_all(infile, recfile, mode):
     results = []
     eof = False
     while not eof:
-        result = se.msg.readMsg(infile, recfile, mode, {})
+        result = se.msg.read_msg(infile, recfile, mode, {})
         results.append(result)
         eof = result[1]
     return results
@@ -91,7 +91,7 @@ HEADER_MODES = [
 
 
 def test_crc_of_nothing_is_the_initial_value():
-    assert se.msg.calcCrc(b"") == 0x5A5A
+    assert se.msg.calc_crc(b"") == 0x5A5A
 
 
 @pytest.mark.parametrize(
@@ -99,12 +99,12 @@ def test_crc_of_nothing_is_the_initial_value():
     [b"\x00", b"\xff", b"123456789", bytes(range(256)), bytearray(b"abc")],
 )
 def test_crc_matches_the_bitwise_definition(data):
-    assert se.msg.calcCrc(data) == reference_crc(data)
+    assert se.msg.calc_crc(data) == reference_crc(data)
 
 
 @pytest.mark.parametrize("data", [b"", b"\x01", b"hello world", bytes(300)])
 def test_format_msg_layout(data):
-    msg = se.msg.formatMsg(0x1234, SRC, DST, FUNCTION, data)
+    msg = se.msg.format_msg(0x1234, SRC, DST, FUNCTION, data)
 
     header = struct.pack(
         "<HHHLLH", len(data), ~len(data) & 0xFFFF, 0x1234, SRC, DST, FUNCTION
@@ -115,15 +115,15 @@ def test_format_msg_layout(data):
 
 
 def test_format_msg_takes_bytearray_data():
-    msg = se.msg.formatMsg(7, SRC, DST, FUNCTION, bytearray(b"ab"))
+    msg = se.msg.format_msg(7, SRC, DST, FUNCTION, bytearray(b"ab"))
 
-    assert msg == se.msg.formatMsg(7, SRC, DST, FUNCTION, b"ab")
+    assert msg == se.msg.format_msg(7, SRC, DST, FUNCTION, b"ab")
 
 
 def test_format_msg_logs_the_header(caplog):
     log_all(caplog, DATA_LEVEL)
 
-    se.msg.formatMsg(0x1234, SRC, DST, FUNCTION, b"ab")
+    se.msg.format_msg(0x1234, SRC, DST, FUNCTION, b"ab")
 
     assert messages(caplog, DATA_LEVEL) == [
         "dataLen:    0002",
@@ -139,7 +139,7 @@ def test_format_msg_logs_the_header(caplog):
 
 
 @pytest.mark.parametrize("data", [b"", b"\x01", b"x" * 100])
-@pytest.mark.parametrize("parse", [se.msg.parseMsg, se.msg.validateMsg])
+@pytest.mark.parametrize("parse", [se.msg.parse_msg, se.msg.validate_msg])
 def test_valid_message_is_parsed(parse, data):
     msg = frame(4660, data, function=0x0080)
 
@@ -147,15 +147,15 @@ def test_valid_message_is_parsed(parse, data):
 
 
 def test_message_as_bytearray_is_parsed():
-    msg = se.msg.formatMsg(5, SRC, DST, FUNCTION, b"\x09")
+    msg = se.msg.format_msg(5, SRC, DST, FUNCTION, b"\x09")
 
-    assert se.msg.parseMsg(msg) == (5, SRC, DST, FUNCTION, b"\x09")
+    assert se.msg.parse_msg(msg) == (5, SRC, DST, FUNCTION, b"\x09")
 
 
 def test_parse_msg_throws_out_a_message_that_is_too_short(caplog):
     log_all(caplog, DATA_LEVEL)
 
-    assert se.msg.parseMsg(EMPTY[:-1]) == NOTHING
+    assert se.msg.parse_msg(EMPTY[:-1]) == NOTHING
 
     assert messages(caplog, DATA_LEVEL) == [
         "Threw out a message that was too short"
@@ -168,7 +168,7 @@ def test_validate_msg_rejects_a_message_that_is_too_short(caplog, length):
     log_all(caplog, DATA_LEVEL)
     msg = EMPTY[:length]
 
-    assert se.msg.validateMsg(msg) == NOTHING
+    assert se.msg.validate_msg(msg) == NOTHING
 
     assert messages(caplog, logging.ERROR) == ["Message too short"]
     assert messages(caplog, DATA_LEVEL) == list(se.logutils.format_data(msg))
@@ -215,7 +215,7 @@ def test_validate_msg_rejects_a_message_that_is_too_short(caplog, length):
         ),
     ],
 )
-@pytest.mark.parametrize("parse", [se.msg.parseMsg, se.msg.validateMsg])
+@pytest.mark.parametrize("parse", [se.msg.parse_msg, se.msg.validate_msg])
 def test_broken_message_is_rejected_and_dumped(caplog, parse, msg, error):
     log_all(caplog, DATA_LEVEL)
 
@@ -230,7 +230,7 @@ def test_broken_message_is_rejected_and_dumped(caplog, parse, msg, error):
 def test_extra_bytes_after_the_message_are_discarded(caplog):
     log_all(caplog, DATA_LEVEL)
 
-    result = se.msg.parseMsg(GOOD + b"\xaa\xbb")
+    result = se.msg.parse_msg(GOOD + b"\xaa\xbb")
 
     assert result == (1, SRC, DST, FUNCTION, b"\x01\x02\x03")
     logged = messages(caplog, DATA_LEVEL)
@@ -243,7 +243,7 @@ def test_extra_bytes_are_dumped_in_lines_of_16(caplog):
     log_all(caplog, DATA_LEVEL)
     extra = bytes(range(20))
 
-    assert se.msg.parseMsg(EMPTY + extra) == (2, SRC, DST, FUNCTION, b"")
+    assert se.msg.parse_msg(EMPTY + extra) == (2, SRC, DST, FUNCTION, b"")
 
     assert "Discarding 20 extra bytes" in messages(caplog, DATA_LEVEL)
     assert messages(caplog, DATA_LEVEL)[-2:] == [
@@ -255,7 +255,7 @@ def test_extra_bytes_are_dumped_in_lines_of_16(caplog):
 def test_message_without_extra_bytes_does_not_log_any(caplog):
     log_all(caplog, DATA_LEVEL)
 
-    se.msg.parseMsg(GOOD)
+    se.msg.parse_msg(GOOD)
 
     assert not [m for m in messages(caplog, DATA_LEVEL) if "extra" in m]
 
@@ -266,7 +266,7 @@ def test_checksum_error_reports_the_calculated_sum_as_expected(caplog):
     calculated = struct.unpack("<H", GOOD[-2:])[0]
     received = calculated ^ 0x0101
 
-    se.msg.parseMsg(GOOD[:-2] + struct.pack("<H", received))
+    se.msg.parse_msg(GOOD[:-2] + struct.pack("<H", received))
 
     (logged,) = messages(caplog, logging.ERROR)
     sums = f"Expected 0x{calculated:04x}, got 0x{received:04x}"
@@ -281,7 +281,7 @@ def test_read_msg_scans_for_the_magic_number(mode):
     infile = make_file(MAGIC + GOOD + MAGIC + EMPTY)
     state = {}
 
-    results = [se.msg.readMsg(infile, None, mode, state) for _ in range(4)]
+    results = [se.msg.read_msg(infile, None, mode, state) for _ in range(4)]
 
     # The first magic number has nothing in front of it, and the last message
     # is ended by the end of the file.
@@ -292,13 +292,13 @@ def test_read_msg_scans_for_the_magic_number(mode):
 def test_read_msg_keeps_garbage_in_front_of_a_message(mode):
     infile = make_file(b"junk" + MAGIC + GOOD)
 
-    assert se.msg.readMsg(infile, None, mode, {}) == (b"junk", False)
-    assert se.msg.readMsg(infile, None, mode, {}) == (GOOD, True)
+    assert se.msg.read_msg(infile, None, mode, {}) == (b"junk", False)
+    assert se.msg.read_msg(infile, None, mode, {}) == (GOOD, True)
 
 
 @pytest.mark.parametrize("mode", SCANNING_MODES)
 def test_read_msg_without_any_magic_number_returns_the_rest(mode):
-    assert se.msg.readMsg(make_file(b"abc"), None, mode, {}) == (b"abc", True)
+    assert se.msg.read_msg(make_file(b"abc"), None, mode, {}) == (b"abc", True)
 
 
 @pytest.mark.parametrize("mode", HEADER_MODES)
@@ -306,7 +306,7 @@ def test_read_msg_uses_the_length_in_the_header(mode):
     infile = make_file(MAGIC + GOOD + MAGIC + EMPTY)
     state = {}
 
-    results = [se.msg.readMsg(infile, None, mode, state) for _ in range(3)]
+    results = [se.msg.read_msg(infile, None, mode, state) for _ in range(3)]
 
     assert results == [(GOOD, False), (EMPTY, False), (b"", True)]
 
@@ -315,7 +315,7 @@ def test_read_msg_uses_the_length_in_the_header(mode):
 def test_read_msg_leaves_the_bytes_after_a_message_unread(mode):
     infile = make_file(MAGIC + GOOD + b"rest")
 
-    assert se.msg.readMsg(infile, None, mode, {}) == (GOOD, False)
+    assert se.msg.read_msg(infile, None, mode, {}) == (GOOD, False)
     assert infile.read() == b"rest"
 
 
@@ -323,8 +323,8 @@ def test_read_msg_leaves_the_bytes_after_a_message_unread(mode):
 def test_read_msg_returns_what_is_left_of_a_truncated_message(mode):
     infile = make_file(MAGIC + GOOD[:-3])
 
-    assert se.msg.readMsg(infile, None, mode, {}) == (GOOD[:-3], False)
-    assert se.msg.readMsg(infile, None, mode, {}) == (b"", True)
+    assert se.msg.read_msg(infile, None, mode, {}) == (GOOD[:-3], False)
+    assert se.msg.read_msg(infile, None, mode, {}) == (b"", True)
 
 
 @pytest.mark.xfail(strict=True, reason="Issue #21")
@@ -332,7 +332,7 @@ def test_read_msg_returns_what_is_left_of_a_truncated_message(mode):
 def test_read_msg_reports_the_end_of_a_file_inside_the_header(mode):
     infile = make_file(MAGIC + GOOD[:6])
 
-    assert se.msg.readMsg(infile, None, mode, {}) == (b"", True)
+    assert se.msg.read_msg(infile, None, mode, {}) == (b"", True)
 
 
 @pytest.mark.parametrize("mode", SCANNING_MODES + HEADER_MODES)
@@ -351,8 +351,8 @@ def test_read_msg_counts_the_messages_it_reads(mode):
     infile = make_file(MAGIC + GOOD)
     before = se.msg.Seq.data_in
 
-    se.msg.readMsg(infile, None, mode, {})
-    se.msg.readMsg(infile, None, mode, {})
+    se.msg.read_msg(infile, None, mode, {})
+    se.msg.read_msg(infile, None, mode, {})
 
     assert se.msg.Seq.data_in == before + 2
 
@@ -369,10 +369,10 @@ def test_read_msg_counts_the_messages_it_reads(mode):
 def test_read_msg_keeps_track_of_its_state(mode, last_byte, length):
     state = {}
 
-    se.msg.readMsg(make_file(MAGIC + GOOD), None, mode, state)
+    se.msg.read_msg(make_file(MAGIC + GOOD), None, mode, state)
 
-    assert state["passiveMode"][1] is mode.passiveMode
-    assert state["serialType"][1] == mode.serialType
+    assert state["passiveMode"][1] is mode.passive_mode
+    assert state["serialType"][1] == mode.serial_type
     assert state["readLength"][1] == length
     assert state["lastByteRead"][1] == last_byte
 
@@ -382,10 +382,10 @@ def test_read_msg_logs_the_message_but_not_empty_ones(caplog, mode):
     log_all(caplog)
     infile = make_file(MAGIC + GOOD)
 
-    se.msg.readMsg(infile, None, mode, {})  # zero length for scanning
-    if mode.passiveMode or mode.serialType == "4":
+    se.msg.read_msg(infile, None, mode, {})  # zero length for scanning
+    if mode.passive_mode or mode.serial_type == "4":
         assert not caplog.records
-        se.msg.readMsg(infile, None, mode, {})
+        se.msg.read_msg(infile, None, mode, {})
 
     seq = se.msg.Seq.data_in
     length = len(MAGIC + GOOD)
@@ -424,7 +424,7 @@ def test_recorded_messages_are_accepted_only_when_whole(golden, sample):
 
     assert whole
     for msg in whole:
-        assert (se.msg.validateMsg(msg) != NOTHING) == is_whole(msg)
+        assert (se.msg.validate_msg(msg) != NOTHING) == is_whole(msg)
 
 
 # --- reading bytes -----------------------------------------------------------
@@ -435,7 +435,7 @@ def test_read_bytes_reads_and_records(caplog):
     recfile = io.BytesIO()
     state = {}
 
-    data = se.msg.readBytes(infile, recfile, 4, run_mode(passive=True), state)
+    data = se.msg.read_bytes(infile, recfile, 4, run_mode(passive=True), state)
 
     assert data == b"abcd"
     assert recfile.getvalue() == b"abcd"
@@ -448,7 +448,7 @@ def test_read_bytes_reads_and_records(caplog):
 def test_read_bytes_works_without_a_record_file():
     infile = make_file(b"\x0a\xff")
 
-    data = se.msg.readBytes(infile, None, 2, run_mode(passive=True), {})
+    data = se.msg.read_bytes(infile, None, 2, run_mode(passive=True), {})
 
     assert data == b"\x0a\xff"
 
@@ -456,7 +456,7 @@ def test_read_bytes_works_without_a_record_file():
 def test_read_bytes_returns_bytes_for_any_buffer():
     infile = types.SimpleNamespace(read=lambda _size: bytearray(b"xy"))
 
-    data = se.msg.readBytes(infile, None, 2, run_mode(passive=True), {})
+    data = se.msg.read_bytes(infile, None, 2, run_mode(passive=True), {})
 
     assert data == b"xy"
     assert type(data) is bytes
@@ -467,7 +467,9 @@ def test_read_bytes_treats_the_end_of_file_as_empty(caplog, record):
     caplog.set_level(logging.INFO, logger="se.msg")
     recfile = io.BytesIO() if record else None
 
-    data = se.msg.readBytes(make_file(), recfile, 3, run_mode(passive=True), {})
+    data = se.msg.read_bytes(
+        make_file(), recfile, 3, run_mode(passive=True), {}
+    )
 
     assert data == b""
     assert any(
@@ -486,7 +488,7 @@ def test_read_bytes_raises_a_read_error_instead_of_ending_the_data():
     infile = types.SimpleNamespace(read=read)
 
     with pytest.raises(OSError, match="disk on fire"):
-        se.msg.readBytes(infile, None, 3, run_mode(passive=True), {})
+        se.msg.read_bytes(infile, None, 3, run_mode(passive=True), {})
 
 
 def test_read_bytes_raises_a_failing_record_file_instead_of_ending_the_data():
@@ -496,7 +498,7 @@ def test_read_bytes_raises_a_failing_record_file_instead_of_ending_the_data():
             raise OSError(msg)
 
     with pytest.raises(OSError, match="no space left"):
-        se.msg.readBytes(
+        se.msg.read_bytes(
             make_file(b"abc"), Failing(), 3, run_mode(passive=True), {}
         )
 
@@ -516,12 +518,12 @@ def test_read_bytes_waits_for_the_file_to_grow_when_following(monkeypatch):
     monkeypatch.setattr(time, "sleep", sleep)
     state = {}
 
-    data = se.msg.readBytes(
+    data = se.msg.read_bytes(
         infile, recfile, 2, run_mode(passive=True, following=True), state
     )
 
     assert data == b"\x01\x02"
-    assert sleeps == [se.msg.sleepInterval] * 3
+    assert sleeps == [se.msg.SLEEP_INTERVAL] * 3
     assert recfile.getvalue() == b"\x01\x02"
     assert state["lastByteRead"][1] == "02"
 
@@ -534,7 +536,7 @@ def test_read_bytes_does_not_wait_when_following_and_data_is_there(
 
     monkeypatch.setattr(time, "sleep", sleep)
 
-    data = se.msg.readBytes(
+    data = se.msg.read_bytes(
         make_file(b"\x05"), None, 1, run_mode(passive=True, following=True), {}
     )
 
@@ -548,7 +550,7 @@ def test_read_bytes_does_not_wait_when_not_following(monkeypatch):
     monkeypatch.setattr(time, "sleep", sleep)
 
     assert (
-        se.msg.readBytes(make_file(), None, 1, run_mode(passive=True), {})
+        se.msg.read_bytes(make_file(), None, 1, run_mode(passive=True), {})
         == b""
     )
 
@@ -560,9 +562,9 @@ def test_read_bytes_does_not_wait_when_not_following(monkeypatch):
 def test_send_msg_writes_the_magic_number_and_the_message(record):
     outfile = make_file()
     recfile = io.BytesIO() if record else None
-    msg = se.msg.formatMsg(3, SRC, DST, FUNCTION, b"\x01")
+    msg = se.msg.format_msg(3, SRC, DST, FUNCTION, b"\x01")
 
-    se.msg.sendMsg(outfile, msg, recfile)
+    se.msg.send_msg(outfile, msg, recfile)
 
     assert outfile.getvalue() == MAGIC + msg
     if record:
@@ -572,11 +574,11 @@ def test_send_msg_writes_the_magic_number_and_the_message(record):
 def test_send_msg_counts_and_logs_the_messages(caplog):
     log_all(caplog, logging.DEBUG)
     outfile = make_file()
-    msg = se.msg.formatMsg(3, SRC, DST, FUNCTION)
+    msg = se.msg.format_msg(3, SRC, DST, FUNCTION)
     before = se.msg.Seq.data_out
 
-    se.msg.sendMsg(outfile, msg, None)
-    se.msg.sendMsg(outfile, msg, None)
+    se.msg.send_msg(outfile, msg, None)
+    se.msg.send_msg(outfile, msg, None)
 
     assert se.msg.Seq.data_out == before + 2
     assert messages(caplog, logging.DEBUG) == [
@@ -587,25 +589,27 @@ def test_send_msg_counts_and_logs_the_messages(caplog):
 
 def test_sent_message_can_be_read_again():
     outfile = make_file()
-    se.msg.sendMsg(outfile, se.msg.formatMsg(9, DST, SRC, 0x0080, b"ok"), None)
+    se.msg.send_msg(
+        outfile, se.msg.format_msg(9, DST, SRC, 0x0080, b"ok"), None
+    )
     outfile.seek(0)
 
-    msg, eof = se.msg.readMsg(
+    msg, eof = se.msg.read_msg(
         outfile, None, run_mode(passive=False, serial_type="2"), {}
     )
 
     assert not eof
-    assert se.msg.parseMsg(msg) == (9, DST, SRC, 0x0080, b"ok")
+    assert se.msg.parse_msg(msg) == (9, DST, SRC, 0x0080, b"ok")
 
 
 def test_record_msg_appends_to_the_file():
     recfile = io.BytesIO()
 
-    se.msg.recordMsg(b"ab", recfile)
-    se.msg.recordMsg(b"cd", recfile)
+    se.msg.record_msg(b"ab", recfile)
+    se.msg.record_msg(b"cd", recfile)
 
     assert recfile.getvalue() == b"abcd"
 
 
 def test_record_msg_without_a_file_does_nothing():
-    assert se.msg.recordMsg(b"ab", None) is None
+    assert se.msg.record_msg(b"ab", None) is None

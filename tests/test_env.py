@@ -26,10 +26,10 @@ def verbose_flags(count):
 def run_mode(**fields):
     return se.env.RunMode(
         **{
-            "serialDevice": False,
-            "serialType": None,
-            "passiveMode": True,
-            "masterMode": False,
+            "serial_device": False,
+            "serial_type": None,
+            "passive_mode": True,
+            "master_mode": False,
             "following": False,
             **fields,
         }
@@ -61,8 +61,8 @@ def serial_port(request, monkeypatch):
     return request.param
 
 
-# Return a function that runs se.env.getArgs() with the given arguments.
-# getArgs() adds a handler to the root logger and sets its level. Undo that,
+# Return a function that runs se.env.get_args() with the given arguments.
+# get_args() adds a handler to the root logger and sets its level. Undo that,
 # but only for the handlers added here: the root logger also holds the
 # handlers of pytest itself.
 @pytest.fixture
@@ -75,7 +75,7 @@ def get_args(monkeypatch):
         before = root.handlers[:]
         monkeypatch.setattr(sys, "argv", ["semonitor.py", *map(str, argv)])
         try:
-            return se.env.getArgs()
+            return se.env.get_args()
         finally:
             added.extend(h for h in root.handlers if h not in before)
 
@@ -141,10 +141,10 @@ def test_plain_options_are_stored(get_args):
 
 def test_run_mode_has_a_name_for_each_field():
     assert se.env.RunMode._fields == (
-        "serialDevice",
-        "serialType",
-        "passiveMode",
-        "masterMode",
+        "serial_device",
+        "serial_type",
+        "passive_mode",
+        "master_mode",
         "following",
     )
 
@@ -487,13 +487,13 @@ NON_SERIAL_MODES = [
     pytest.param(
         ["-c", "0a", "-s", "7f104920"],
         "stdin",
-        run_mode(passiveMode=False),
+        run_mode(passive_mode=False),
         id="command-on-stdin",
     ),
     pytest.param(
         ["-c", "0a/0b", "-s", "1", "capture.rec"],
         "capture.rec",
-        run_mode(passiveMode=False),
+        run_mode(passive_mode=False),
         id="commands-on-a-file",
     ),
 ]
@@ -514,41 +514,41 @@ def test_mode_without_a_serial_device(get_args, argv, datasource, expected):
 SERIAL_MODES = [
     pytest.param(
         ["-t", "4", "{port}"],
-        run_mode(serialDevice=True, serialType="4"),
+        run_mode(serial_device=True, serial_type="4"),
         id="rs485",
     ),
     pytest.param(
         ["-f", "-t", "4", "{port}"],
-        run_mode(serialDevice=True, serialType="4"),
+        run_mode(serial_device=True, serial_type="4"),
         id="rs485-follow-option",
     ),
     pytest.param(
         ["-m", "-t", "4", "-s", "1,2", "{port}"],
         run_mode(
-            serialDevice=True,
-            serialType="4",
-            passiveMode=False,
-            masterMode=True,
+            serial_device=True,
+            serial_type="4",
+            passive_mode=False,
+            master_mode=True,
         ),
         id="rs485-master",
     ),
     pytest.param(
         ["-t", "4", "-c", "0a", "-s", "1", "{port}"],
-        run_mode(serialDevice=True, serialType="4", passiveMode=False),
+        run_mode(serial_device=True, serial_type="4", passive_mode=False),
         id="rs485-command",
     ),
     pytest.param(
         ["-t", "2", "-c", "0a", "-s", "1", "{port}"],
-        run_mode(serialDevice=True, serialType="2", passiveMode=False),
+        run_mode(serial_device=True, serial_type="2", passive_mode=False),
         id="rs232-command",
     ),
     pytest.param(
         ["-m", "-t", "4", "-s", "1", "-c", "0a", "{port}"],
         run_mode(
-            serialDevice=True,
-            serialType="4",
-            passiveMode=False,
-            masterMode=True,
+            serial_device=True,
+            serial_type="4",
+            passive_mode=False,
+            master_mode=True,
         ),
         id="rs485-master-and-command",
     ),
@@ -567,9 +567,9 @@ def test_mode_with_a_serial_device(get_args, serial_port, argv, expected):
 def test_serial_device_with_its_type(get_args, serial_port, serial_type):
     _args, mode = get_args("-t", serial_type, serial_port)
 
-    assert mode.serialDevice
-    assert mode.serialType == serial_type
-    assert not mode.masterMode
+    assert mode.serial_device
+    assert mode.serial_type == serial_type
+    assert not mode.master_mode
 
 
 def test_serial_device_is_followed_with_the_follow_option(
@@ -606,7 +606,7 @@ def test_a_port_that_is_not_listed_is_not_a_serial_device(usage_error):
 def test_rs232_mode_is_not_passive(get_args, serial_port):
     _args, mode = get_args("-t", "2", serial_port)
 
-    assert not mode.passiveMode
+    assert not mode.passive_mode
 
 
 @pytest.mark.xfail(strict=True, reason="Issue #39")

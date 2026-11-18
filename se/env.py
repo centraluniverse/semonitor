@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 RunMode = namedtuple(
     "RunMode",
     (
-        "serialDevice",  # boolean
-        "serialType",  # serial device type: "2" or "4"
-        "passiveMode",  # boolean
-        "masterMode",  # boolean
+        "serial_device",  # boolean
+        "serial_type",  # serial device type: "2" or "4"
+        "passive_mode",  # boolean
+        "master_mode",  # boolean
         "following",  # boolean
     ),
 )
@@ -313,7 +313,7 @@ def _log_arguments(args):
         logger.info("%s: %s", k, shown)
 
 
-def getArgs():
+def get_args():
     """
     Get the arguments from the command line, or argv, and validate them.
 
