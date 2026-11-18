@@ -285,6 +285,33 @@ class ParseDevice(dict):
         """
         return binascii.unhexlify(hex_data.replace("|", "").replace(" ", ""))
 
+    def __eq__(self, other):
+        """
+        Compare the items, and the device type and id kept outside of them.
+
+        Args:
+            other: The object to compare with.
+
+        Returns:
+            True if the items are equal and, when other is a ParseDevice, so
+            are the device type and id. NotImplemented is what dict returns
+            for an object it cannot compare with.
+        """
+        if isinstance(other, ParseDevice):
+            return (
+                dict.__eq__(self, other)
+                and self.dev_type == other.dev_type
+                and self._seId == other._seId
+            )
+        return dict.__eq__(self, other)
+
+    def __ne__(self, other):
+        """Return the opposite of __eq__ (dict defines its own __ne__)."""
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    __hash__ = None
+
     def __init__(self, data, **_kwargs):
         """
         Parse the data block, then run the derivations and hypothesis checks.
@@ -1040,6 +1067,33 @@ class ParseDeviceExplorer(ParseDevice):
     field_defs: ClassVar[list[list[Any]]] = []
     _item_names: ClassVar[list[str]] = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
+
+    def __eq__(self, other):
+        """
+        Compare the explorer attributes, as well as those of ParseDevice.
+
+        Args:
+            other: The object to compare with.
+
+        Returns:
+            True if ParseDevice.__eq__ holds and, when other is a
+            ParseDeviceExplorer, so do the se_type and the length of the
+            field definitions.
+        """
+        if isinstance(other, ParseDeviceExplorer):
+            return (
+                ParseDevice.__eq__(self, other)
+                and self.se_type == other.se_type
+                and self._field_defs_len == other._field_defs_len
+            )
+        return ParseDevice.__eq__(self, other)
+
+    def __ne__(self, other):
+        """Return the opposite of __eq__ (dict defines its own __ne__)."""
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    __hash__ = None
 
     def parse_dev_table(self, data):
         """
