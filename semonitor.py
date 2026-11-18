@@ -97,38 +97,42 @@ def processMsg(msg, mode, state, files):
             # write performance data to output file
             se.data.writeData(msgData, files.out)
         if mode.masterMode:  # send reply
-            replyFunction = b""
-            if (
-                function == se.commands.PROT_CMD_SERVER_POST_DATA
-            ):  # performance data
-                # send ack
-                replyFunction = se.commands.PROT_RESP_ACK
-                replyData = b""
-            elif function == PROT_CMD_SERVER_KEY:
-                # send ack
-                replyFunction = se.commands.PROT_RESP_ACK
-                replyData = b""
-            elif (
-                function == se.commands.PROT_CMD_SERVER_GET_GMT
-            ):  # time request
-                # set time
-                replyFunction = se.commands.PROT_RESP_SERVER_GMT
-                replyData = se.data.formatTime(
-                    int(time.time()),
-                    (time.localtime().tm_hour - time.gmtime().tm_hour)
-                    * 60
-                    * 60,
-                )
-            elif (
-                function == se.commands.PROT_RESP_POLESTAR_MASTER_GRANT_ACK
-            ):  # RS485 master release
-                masterEvent.set()
-                se.logutils.setState(state, "masterEvent", masterEvent.is_set())
+            (replyFunction, replyData) = master_reply(function, state)
             if replyFunction:
                 msg = se.msg.formatMsg(
                     msgSeq, toAddr, fromAddr, replyFunction, replyData
                 )
                 se.msg.sendMsg(files.data, msg, files.rec)
+
+
+def master_reply(function, state):
+    """
+    Return the RS485 master's reply to a message.
+
+    Acknowledges data and key messages, answers time requests with the
+    current GMT time, and releases the bus on a grant acknowledgment.
+
+    Returns:
+        A tuple (function, data) of the reply. The function is b"" when no
+        reply is needed.
+    """
+    if function in (se.commands.PROT_CMD_SERVER_POST_DATA, PROT_CMD_SERVER_KEY):
+        # send ack
+        return (se.commands.PROT_RESP_ACK, b"")
+    if function == se.commands.PROT_CMD_SERVER_GET_GMT:  # time request
+        # set time
+        return (
+            se.commands.PROT_RESP_SERVER_GMT,
+            se.data.formatTime(
+                int(time.time()),
+                (time.localtime().tm_hour - time.gmtime().tm_hour) * 60 * 60,
+            ),
+        )
+    if function == se.commands.PROT_RESP_POLESTAR_MASTER_GRANT_ACK:
+        # RS485 master release
+        masterEvent.set()
+        se.logutils.setState(state, "masterEvent", masterEvent.is_set())
+    return (b"", b"")
 
 
 # RS485 master commands thread
