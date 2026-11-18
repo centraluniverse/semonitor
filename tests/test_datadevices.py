@@ -12,9 +12,9 @@ import se.commands
 import se.msg
 from se.datadevices import (
     ParseDevice,
-    ParseDevice_0x0022,
-    ParseDevice_0x0030,
-    ParseDevice_Explorer,
+    ParseDevice0x0022,
+    ParseDevice0x0030,
+    ParseDeviceExplorer,
     merge_update,
 )
 
@@ -230,7 +230,7 @@ METER_P2X = 50
 def recorded_messages(rec_path):
     messages = []
     for raw in rec_path.read_bytes().split(se.msg.magic)[1:]:
-        function, data = se.msg.parseMsg(raw)[3:]
+        function, data = se.msg.parse_msg(raw)[3:]
         if function != se.commands.PROT_CMD_SERVER_POST_DATA or not data:
             continue
         records = []
@@ -341,12 +341,12 @@ def comparable(device):
 # the explorer adds item names), so every test gets pristine copies.
 @pytest.fixture(autouse=True)
 def isolate_class_state(monkeypatch):
-    for cls in (ParseDevice_0x0022, ParseDevice_0x0030, ParseDevice_Explorer):
+    for cls in (ParseDevice0x0022, ParseDevice0x0030, ParseDeviceExplorer):
         monkeypatch.setattr(cls, "field_defs", list(vars(cls)["field_defs"]))
     monkeypatch.setattr(
-        ParseDevice_Explorer,
-        "_itemNames",
-        list(vars(ParseDevice_Explorer)["_itemNames"]),
+        ParseDeviceExplorer,
+        "_item_names",
+        list(vars(ParseDeviceExplorer)["_item_names"]),
     )
 
 
@@ -355,16 +355,16 @@ def parse_calls(monkeypatch):
     calls = []
 
     def count(cls):
-        original = vars(cls)["parseDevTable"]
+        original = vars(cls)["parse_dev_table"]
 
         def counted(self, data):
             calls.append(type(self).__name__)
             return original(self, data)
 
-        monkeypatch.setattr(cls, "parseDevTable", counted)
+        monkeypatch.setattr(cls, "parse_dev_table", counted)
 
     count(ParseDevice)
-    count(ParseDevice_Explorer)
+    count(ParseDeviceExplorer)
     return calls
 
 
@@ -386,26 +386,26 @@ def raise_value_error(_timestamp):
     ],
 )
 def test_parse_id_masks_flag_bit_and_gives_upper_case(se_id, expected):
-    assert ParseDevice.parseId(se_id) == expected
+    assert ParseDevice.parse_id(se_id) == expected
 
 
 def test_date_and_time_stamps_use_local_time(monkeypatch):
     stamp = 1_700_000_000  # 2023-11-14 22:13:20 UTC
 
-    assert ParseDevice.formatDateStamp(stamp) == "2023-11-14"
-    assert ParseDevice.formatTimeStamp(stamp) == "22:13:20"
-    assert ParseDevice.formatDateStamp(0) == "1970-01-01"
-    assert ParseDevice.formatTimeStamp(3661) == "01:01:01"
+    assert ParseDevice.format_date_stamp(stamp) == "2023-11-14"
+    assert ParseDevice.format_time_stamp(stamp) == "22:13:20"
+    assert ParseDevice.format_date_stamp(0) == "1970-01-01"
+    assert ParseDevice.format_time_stamp(3661) == "01:01:01"
 
     monkeypatch.setenv("TZ", "EET-2")
     time.tzset()
 
-    assert ParseDevice.formatDateStamp(stamp) == "2023-11-15"
-    assert ParseDevice.formatTimeStamp(stamp) == "00:13:20"
+    assert ParseDevice.format_date_stamp(stamp) == "2023-11-15"
+    assert ParseDevice.format_time_stamp(stamp) == "00:13:20"
 
 
 @pytest.mark.parametrize(
-    "method", [ParseDevice.formatDateStamp, ParseDevice.formatTimeStamp]
+    "method", [ParseDevice.format_date_stamp, ParseDevice.format_time_stamp]
 )
 def test_unrepresentable_time_stamp_is_reported_as_invalid(caplog, method):
     with caplog.at_level(logging.INFO, logger=LOGGER):
@@ -448,16 +448,16 @@ def test_unrepresentable_time_stamp_is_reported_as_invalid(caplog, method):
     ],
 )
 def test_hex_data_wraps_after_16_bytes(data, expected):
-    assert ParseDevice.hexData(data) == expected
+    assert ParseDevice.hex_data(data) == expected
 
 
 @pytest.mark.parametrize("data", [b"", b"\x00", bytes(range(40))])
 def test_unhex_data_inverts_hex_data(data):
-    assert ParseDevice.unhexData(ParseDevice.hexData(data)) == data
+    assert ParseDevice.unhex_data(ParseDevice.hex_data(data)) == data
 
 
 def test_unhex_data_ignores_spaces_and_separators():
-    assert ParseDevice.unhexData("00 01 | ff") == b"\x00\x01\xff"
+    assert ParseDevice.unhex_data("00 01 | ff") == b"\x00\x01\xff"
 
 
 # --- unknown devices (real records) ------------------------------------------
@@ -512,7 +512,7 @@ def test_unknown_devices_of_different_length_do_not_share_definitions(
     short_dev = ParseDevice(short_record)
     again = ParseDevice(table_record(0x0043))
 
-    assert short_dev["Undeciphered_data"] == ParseDevice.hexData(
+    assert short_dev["Undeciphered_data"] == ParseDevice.hex_data(
         payload_of(short_record)[4:]
     )
     assert long_dev == again
@@ -530,7 +530,7 @@ def test_unknown_device_is_wrapped_by_type_and_id(record):
 
 
 def test_base_class_has_no_exported_items():
-    assert ParseDevice.itemNames() == []
+    assert ParseDevice.item_names() == []
 
 
 # --- batteries (0x0030) ------------------------------------------------------
@@ -539,7 +539,7 @@ def test_base_class_has_no_exported_items():
 def test_battery_record_is_decoded():
     dev = ParseDevice(table_record(0x0030))
 
-    assert type(dev) is ParseDevice_0x0030
+    assert type(dev) is ParseDevice0x0030
     assert comparable(dev) == table_expected(0x0030)
     assert dev.field_defs_len == dev["devLen"]
 
@@ -583,8 +583,8 @@ def test_battery_with_trailing_bytes_keeps_them_as_hex(record):
 def test_trailing_bytes_become_a_part_of_the_battery_definition(record):
     ParseDevice(resized(record, payload_of(record) + b"\x01"))
 
-    assert ParseDevice_0x0030.itemNames()[-1] == "Undeciphered_data"
-    assert sum(item[0] for item in ParseDevice_0x0030.field_defs) == (  # idem
+    assert ParseDevice0x0030.item_names()[-1] == "Undeciphered_data"
+    assert sum(item[0] for item in ParseDevice0x0030.field_defs) == (  # idem
         len(payload_of(record)) + 1
     )
 
@@ -612,7 +612,7 @@ def test_battery_shorter_than_its_definition_is_rejected(record):
 
 
 def test_battery_item_names_are_the_exported_fields():
-    assert ParseDevice_0x0030.itemNames() == [
+    assert ParseDevice0x0030.item_names() == [
         "Date",
         "Time",
         "batteryId",
@@ -646,7 +646,7 @@ def test_battery_with_nonzero_unused_field_logs_failed_hypothesis(
     # A set, the count is for test_failed_hypothesis_is_logged_once.
     assert set(caplog.messages) == {
         (
-            f"Failed hypothesis ParseDevice_0x0030 {plain['Date']} "
+            f"Failed hypothesis ParseDevice0x0030 {plain['Date']} "
             f"{plain['Time']}"
             " : abs(self['AlwaysZero_48_float']) < 10**25 is not True"
         )
@@ -684,7 +684,7 @@ def test_recorded_batteries_and_meters_satisfy_the_hypotheses(record, caplog):
 def test_meter_grid_record_is_decoded():
     dev = ParseDevice(table_record(0x0022, 5))
 
-    assert type(dev) is ParseDevice_0x0022
+    assert type(dev) is ParseDevice0x0022
     assert comparable(dev) == table_expected(0x0022, 5)
     assert dev.field_defs_len == dev["devLen"]
 
@@ -788,7 +788,7 @@ def test_meter_with_nonzero_padding_logs_failed_hypothesis(record, caplog):
 
     assert set(caplog.messages) == {
         (
-            f"Failed hypothesis ParseDevice_0x0022 {plain['Date']} "
+            f"Failed hypothesis ParseDevice0x0022 {plain['Date']} "
             f"{plain['Time']}"
             " : self['AlwaysZero_off26_int2'] == 0 is not True"
         )
@@ -796,7 +796,7 @@ def test_meter_with_nonzero_padding_logs_failed_hypothesis(record, caplog):
 
 
 def test_meter_item_names_are_the_exported_fields():
-    assert ParseDevice_0x0022.itemNames() == [
+    assert ParseDevice0x0022.item_names() == [
         "Date",
         "Time",
         "recType",
@@ -850,7 +850,7 @@ def test_each_record_is_parsed_once(parse_calls, record, explorer):
 @pytest.mark.parametrize("record", METERS)
 def test_derived_items_get_their_defaults(monkeypatch, record):
     monkeypatch.setattr(
-        ParseDevice_0x0022,
+        ParseDevice0x0022,
         "_derivn",
         [
             ["Extra", 0.5, True, "net power"],
@@ -866,12 +866,12 @@ def test_derived_items_get_their_defaults(monkeypatch, record):
 
 def test_derived_items_are_exported_after_the_defined_ones(monkeypatch):
     monkeypatch.setattr(
-        ParseDevice_0x0022,
+        ParseDevice0x0022,
         "_derivn",
         [["Extra", 0, True, "shown"], ["Hidden", 0, False, "not shown"]],
     )
 
-    names = ParseDevice_0x0022.itemNames()
+    names = ParseDevice0x0022.item_names()
 
     assert names[-1] == "Extra"
     assert "Hidden" not in names
@@ -884,8 +884,8 @@ def test_derived_items_are_exported_after_the_defined_ones(monkeypatch):
 @pytest.mark.parametrize(
     ("method", "key", "placeholder"),
     [
-        ("formatDateStamp", "Date", "1970-01-01"),
-        ("formatTimeStamp", "Time", "00:00:01"),
+        ("format_date_stamp", "Date", "1970-01-01"),
+        ("format_time_stamp", "Time", "00:00:01"),
     ],
 )
 def test_timestamp_that_cannot_be_formatted_gets_a_placeholder(
@@ -923,16 +923,16 @@ def test_explorer_parses_unknown_device_every_way_it_can(record):
 
     dev = ParseDevice(record, explorer=True)
 
-    assert type(dev) is ParseDevice_Explorer
+    assert type(dev) is ParseDeviceExplorer
     assert dev["seType"] == "0x0018"
     assert dev["seId"] == plain["seId"]
     assert dev["devLen"] == len(payload)
     assert dev["devType"] == "explore_0x0018"
-    assert dev["AllAsHex"] == ParseDevice.hexData(payload)
-    assert dev["offset000_1_hex1"] == ParseDevice.hexData(payload[:1])
-    assert dev["offset000_1_hex2"] == ParseDevice.hexData(payload[:2])
+    assert dev["AllAsHex"] == ParseDevice.hex_data(payload)
+    assert dev["offset000_1_hex1"] == ParseDevice.hex_data(payload[:1])
+    assert dev["offset000_1_hex2"] == ParseDevice.hex_data(payload[:2])
     assert dev["offset000_4_int2"] == struct.unpack_from("<H", payload)[0]
-    assert dev["offset000_1_hex4"] == ParseDevice.hexData(payload[:4])
+    assert dev["offset000_1_hex4"] == ParseDevice.hex_data(payload[:4])
     assert dev["offset000_3_float_LE"] == struct.unpack("<f", payload[:4])[0]
     assert dev["offset000_3_float_BE"] == struct.unpack(">f", payload[:4])[0]
     assert dev["offset000_4_int4"] == struct.unpack_from("<I", payload)[0]
@@ -948,7 +948,7 @@ def test_explorer_takes_date_and_time_from_the_first_offset(record):
 
     assert dev["Date"] == ParseDevice(record)["Date"]
     assert dev["Time"] == ParseDevice(record)["Time"]
-    assert dev["Date_offset002"] == ParseDevice.formatDateStamp(
+    assert dev["Date_offset002"] == ParseDevice.format_date_stamp(
         dev["offset002_4_int4"]
     )
     assert dev["Date_offset002"] != dev["Date"]
@@ -981,7 +981,7 @@ def test_explorer_only_parses_the_bytes_that_exist(record, dev_len, layout):
 def test_explorer_item_names_list_everything_it_parsed(record):
     ParseDevice(resized(record, payload_of(record)[:2]), explorer=True)
 
-    names = ParseDevice_Explorer.itemNames()
+    names = ParseDeviceExplorer.item_names()
 
     assert list(dict.fromkeys(names)) == [
         "seType",
@@ -999,7 +999,7 @@ def test_explorer_item_names_list_everything_it_parsed(record):
 def test_explorer_item_names_are_not_repeated(record):
     ParseDevice(record, explorer=True)
 
-    names = ParseDevice_Explorer.itemNames()
+    names = ParseDeviceExplorer.item_names()
 
     assert len(names) == len(set(names))
 
@@ -1009,7 +1009,7 @@ def test_explorer_parse_at_offset_beyond_the_data_adds_nothing(record):
     dev = ParseDevice(resized(record, payload_of(record)[:2]), explorer=True)
     before = dict(dev)
 
-    dev.parseAtOffset(payload_of(record)[:2], 2, 2)
+    dev.parse_at_offset(payload_of(record)[:2], 2, 2)
 
     assert dev == before
 
@@ -1038,7 +1038,7 @@ def test_explorer_item_is_wrapped_by_the_same_id_as_other_devices(record):
 @pytest.mark.parametrize("record", UNKNOWN)
 def test_explorer_marks_offsets_that_are_not_a_date(monkeypatch, record):
     monkeypatch.setattr(
-        ParseDevice, "formatDateStamp", staticmethod(raise_value_error)
+        ParseDevice, "format_date_stamp", staticmethod(raise_value_error)
     )
 
     dev = ParseDevice(resized(record, b"\x01\x00\x00\x00"), explorer=True)
@@ -1052,16 +1052,16 @@ def test_explorer_marks_offsets_that_are_not_a_date(monkeypatch, record):
 def test_explorer_is_not_used_for_known_devices(record):
     dev = ParseDevice(record, explorer=True)
 
-    assert type(dev) is ParseDevice_0x0030
+    assert type(dev) is ParseDevice0x0030
 
 
 # --- documentation of the definitions ----------------------------------------
 
 
 def test_item_defs_describes_every_field_of_a_device():
-    text = ParseDevice_0x0030.itemDefs()
+    text = ParseDevice0x0030.item_defs()
 
-    assert "ParseDevice_0x0030 / batteries_0x0030 parses data blocks" in text
+    assert "ParseDevice0x0030 / batteries_0x0030 parses data blocks" in text
     assert "seType = 0x0030." in text
     assert "batteryId" in text
     assert "identifier for this battery" in text
@@ -1069,7 +1069,7 @@ def test_item_defs_describes_every_field_of_a_device():
 
 
 def test_item_defs_lists_the_byte_offset_of_each_field():
-    lines = ParseDevice_0x0030.itemDefs().splitlines()
+    lines = ParseDevice0x0030.item_defs().splitlines()
 
     battery_id = next(line for line in lines if "batteryId" in line)
     vdc = next(line for line in lines if "| Vdc" in line)
@@ -1079,29 +1079,29 @@ def test_item_defs_lists_the_byte_offset_of_each_field():
 
 def test_item_defs_describes_derived_items(monkeypatch):
     monkeypatch.setattr(
-        ParseDevice_0x0022, "_derivn", [["Extra", 0.5, True, "net power"]]
+        ParseDevice0x0022, "_derivn", [["Extra", 0.5, True, "net power"]]
     )
 
-    text = ParseDevice_0x0022.itemDefs()
+    text = ParseDevice0x0022.item_defs()
 
     assert "Derived items" in text
     assert "(default=0.5) net power" in text
 
 
 def test_item_defs_of_base_class_describes_all_known_devices():
-    text = ParseDevice.itemDefs()
+    text = ParseDevice.item_defs()
 
     assert f"seType = {0xFFFF:#06x}." in text
-    assert "ParseDevice_0x0030 / batteries_0x0030 parses" in text
-    assert "ParseDevice_0x0022 / meters_0x0022 parses" in text
+    assert "ParseDevice0x0030 / batteries_0x0030 parses" in text
+    assert "ParseDevice0x0022 / meters_0x0022 parses" in text
     assert "parses data blocks with any unrecognized seType" in text
 
 
 def test_item_defs_of_explorer_explains_how_it_works():
-    text = ParseDevice_Explorer.itemDefs()
+    text = ParseDeviceExplorer.item_defs()
 
     assert text.startswith(
-        f"\n\nParseDevice_Explorer / explore_{0xFFFF:#06x} parses data blocks"
+        f"\n\nParseDeviceExplorer / explore_{0xFFFF:#06x} parses data blocks"
         " with any unrecognized seType."
     )
     assert "Item names are generated automatically" in text
