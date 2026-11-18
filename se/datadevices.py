@@ -584,7 +584,8 @@ class ParseDevice_0x0030(ParseDevice):
         # instantiated / created, it would call the __new__ method of
         # ParseDevice itself, which would redirect the creation to this
         # subclass, and so on until the recursion limit was reached!
-        # PS Note that a more usual idiom would be super().__new__(cls), but that
+        # PS Note that a more usual idiom would be super().__new__(cls),
+        # but that
         # is the __new__ of ParseDevice, which is what we are trying to avoid!
         return dict.__new__(cls)
 
@@ -1031,8 +1032,10 @@ class ParseDevice_Explorer(ParseDevice):
     def __new__(cls, _data):
         """Create a bare dictionary instance, without ParseDevice.__new__."""
         # Create a bare minimum instance of a dictionary.
-        # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
-        # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
+        # NB This step is essential, because otherwise, when this subclass was
+        # instantiated / created, it would call the __new__ method of
+        # ParseDevice itself, which would redirect the creation to this
+        # subclass, and so on until
         # the recursion limit was reached!
         return dict.__new__(cls)
 
@@ -1071,7 +1074,8 @@ class ParseDevice_Explorer(ParseDevice):
         # For standard subclasses, dev_type will already have this value.
         # However ParseDevice_Explorer can be used as a default parser, when a
         # new device is encountered, in which case the actual instance value of
-        # se_type would be unknown when the seDataDevices module was imported (or
+        # se_type would be unknown when the seDataDevices module was
+        # imported (or
         # in other words, ParseDevice_Explorer.se_type will contain a nonsense
         # value which must be corrected when real data is read)
         self.dev_type = f"{self._devName}_{seType:#06x}"
@@ -1094,7 +1098,8 @@ class ParseDevice_Explorer(ParseDevice):
         # I am assuming items will be at least 2 bytes long. Easy enough to
         # change if you need to try different offsets.
         for offset in range(0, devLen, 2):
-            # Parse a range of possible interpretations of the (4) bytes beginning at offset.
+            # Parse a range of possible interpretations of the (4) bytes
+            # beginning at offset.
             self.parseAtOffset(data[dataPtr:], offset, devLen)
 
     def parseAtOffset(self, data, offset, devlen):
@@ -1171,7 +1176,8 @@ class ParseDevice_Explorer(ParseDevice):
         Returns:
             The list of item names, generated from the offsets of the bytes.
         """
-        # Warning. If ParseDevice_Explorer is used on more than 1 seType data block in a single run, this will *NOT*
+        # Warning. If ParseDevice_Explorer is used on more than 1 seType data
+        # block in a single run, this will *NOT*
         # return sensible values!
         return cls._itemNames
 

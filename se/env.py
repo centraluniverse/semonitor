@@ -18,7 +18,8 @@ import se.logutils
 
 logger = logging.getLogger(__name__)
 
-# run environment that is derived from the arguments that defines how the program will behave
+# run environment that is derived from the arguments that defines how the
+# program will behave
 RunMode = namedtuple(
     "RunMode",
     (

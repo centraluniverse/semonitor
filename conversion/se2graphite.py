@@ -13,7 +13,8 @@ from common import open_input, unwrap_metricsDict
 try:
     import syslog
 except ImportError:
-    # Allow for the fact that syslog is not (to my knowledge) available on Windows
+    # Allow for the fact that syslog is not (to my knowledge) available on
+    # Windows
     import seWindowsSyslog as syslog
 
 
@@ -69,8 +70,9 @@ if __name__ == "__main__":
                         1,
                         1,
                     )
-                # Set the dst parameter in mktime to -1, so that the system determines whether dst is in effect!
-                # Without this, when dst is in effect, the timeStamp is 3600 seconds into the future!
+                # Set the dst parameter in mktime to -1, so that the system
+                # determines whether dst is in effect! Without this, when dst is
+                # in effect, the timeStamp is 3600 seconds into the future!
                 timeStamp = time.mktime(
                     (
                         int(year),
