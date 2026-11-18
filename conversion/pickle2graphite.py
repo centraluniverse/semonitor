@@ -26,7 +26,7 @@ import struct
 import sys
 import time
 
-from common import open_input, unwrap_metricsDict
+from common import open_input, unwrap_metrics_dict
 
 try:
     import syslog
@@ -46,7 +46,7 @@ def log(*args):
 
 # parameter defaults
 base = ""
-hostName = "localhost"
+host_name = "localhost"
 # Port must be the port which Graphite (carbon) has configured to be the pickle listener port.
 # The usual Graphite installation default is 2004.
 port = 2004
@@ -56,38 +56,38 @@ following = False
 
 # get program arguments and options
 (opts, args) = getopt.getopt(sys.argv[1:], "b:fh:p:")
-inFile = open_input(args)
+in_file = open_input(args)
 for opt in opts:
     if opt[0] == "-b":
         base = opt[1] + "."
     if opt[0] == "-h":
-        hostName = opt[1]
+        host_name = opt[1]
     if opt[0] == "-p":
         port = int(opt[1])
     if opt[0] == "-f":
         following = True
 
 
-def getJsonStr(inFile, following):
+def get_json_str(in_file, following):
     """
     Read the next line of JSON from the input.
 
     If following is True, wait (sleeping for delay seconds between tries) until a line arrives.
 
     Args:
-        inFile: The open input file to read from.
+        in_file: The open input file to read from.
         following: Whether to keep waiting for new data at end of file.
 
     Returns:
         The line read, or an empty string at end of file when not following.
     """
-    jsonStr = inFile.readline()
-    if jsonStr == "" and following:
-        while jsonStr == "":
+    json_str = in_file.readline()
+    if json_str == "" and following:
+        while json_str == "":
             # wait for more data
             time.sleep(delay)
-            jsonStr = inFile.readline()
-    return jsonStr
+            json_str = in_file.readline()
+    return json_str
 
 
 class Pickle2Graphite(list):
@@ -98,19 +98,19 @@ class Pickle2Graphite(list):
     carbon's pickle listener port.
     """
 
-    def __init__(self, metricsDict, base):
+    def __init__(self, metrics_dict, base):
         """
-        Build the list of (name, (timestamp, value)) tuples from metricsDict.
+        Build the list of (name, (timestamp, value)) tuples from metrics_dict.
 
         Args:
-            metricsDict: A nested dictionary of devices and their attributes, as produced by json.loads.
+            metrics_dict: A nested dictionary of devices and their attributes, as produced by json.loads.
             base: A prefix to put in front of every metric name.
         """
-        for baseName, devAttrs in unwrap_metricsDict(metricsDict):
+        for base_name, dev_attrs in unwrap_metrics_dict(metrics_dict):
             # convert date and time to Unix time
             try:
-                (year, month, day) = devAttrs["Date"].split("-")
-                (hour, minute, second) = devAttrs["Time"].split(":")
+                (year, month, day) = dev_attrs["Date"].split("-")
+                (hour, minute, second) = dev_attrs["Time"].split(":")
             except KeyError:
                 log(
                     "Date or Time is missing or incorrectly formatted for this set of metrics"
@@ -118,7 +118,7 @@ class Pickle2Graphite(list):
                 (year, month, day, hour, minute, second) = (1970, 1, 1, 0, 1, 1)
             # Set the dst parameter in mktime to -1, so that the system determines whether dst is in effect!
             # Without this, when dst is in effect, the timeStamp is 3600 seconds into the future!
-            timeStamp = time.mktime(
+            time_stamp = time.mktime(
                 (
                     int(year),
                     int(month),
@@ -132,26 +132,29 @@ class Pickle2Graphite(list):
                 )
             )
             # Treat every attribute as a metric - except for non-numeric ones!
-            for devAttr in devAttrs:
-                if devAttr not in {"Date", "Time", "Undeciphered_data"}:
+            for dev_attr in dev_attrs:
+                if dev_attr not in {"Date", "Time", "Undeciphered_data"}:
                     try:
                         # Weed out attributes with non numeric values (Graphite does this too, but why clog the
                         # network?)
-                        test = float(devAttrs[devAttr])
+                        test = float(dev_attrs[dev_attr])
                         if math.isnan(test):
                             # It's a NaN!
                             pass
                         else:
-                            fullName = f"{base}{baseName}.{devAttr}"
+                            full_name = f"{base}{base_name}.{dev_attr}"
                             # A nested tuple as per the expectations of the pickle Graphite interface
                             self.append(
-                                (fullName, (timeStamp, str(devAttrs[devAttr])))
+                                (
+                                    full_name,
+                                    (time_stamp, str(dev_attrs[dev_attr])),
+                                )
                             )
                     except ValueError:
                         # It is not a numeric metric
                         pass
 
-    def send(self, graphiteSocket):
+    def send(self, graphite_socket):
         """
         Pickle the metrics and send them to the Graphite socket.
 
@@ -159,12 +162,12 @@ class Pickle2Graphite(list):
         A short delay follows each send so that carbon is not swamped.
 
         Args:
-            graphiteSocket: A connected socket to the carbon pickle listener.
+            graphite_socket: A connected socket to the carbon pickle listener.
         """
         payload = pickle.dumps(list(self))
         header = struct.pack("!L", len(payload))
         # print len(payload)
-        graphiteSocket.send(header + payload)
+        graphite_socket.send(header + payload)
         time.sleep(delay)
 
 
@@ -172,23 +175,23 @@ if __name__ == "__main__":
     # Timeout if no connection after 10 seconds,
     #   in which case check that Graphite is running, and the hostName and port are correct.
     socket.setdefaulttimeout(10.0)
-    graphiteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    graphite_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # NB `port` must be the carbon pickle port, usually 2004 is configured by default.
-    graphiteSocket.connect((hostName, port))
-    with inFile:
-        jsonStr = getJsonStr(inFile, following)
-        while jsonStr != "":
+    graphite_socket.connect((host_name, port))
+    with in_file:
+        json_str = get_json_str(in_file, following)
+        while json_str != "":
             try:
-                inDict = json.loads(jsonStr)
-                pickle2graphite = Pickle2Graphite(inDict, base=base)
-                pickle2graphite.send(graphiteSocket)
+                in_dict = json.loads(json_str)
+                pickle2graphite = Pickle2Graphite(in_dict, base=base)
+                pickle2graphite.send(graphite_socket)
             except ValueError:
                 log(
                     "WARNING json.loads had a problem with the following jsonStr\n",
-                    jsonStr,
+                    json_str,
                     "\n",
                     "=" * 80,
                     "\n",
                 )
-            jsonStr = getJsonStr(inFile, following)
-    graphiteSocket.close()
+            json_str = get_json_str(in_file, following)
+    graphite_socket.close()
