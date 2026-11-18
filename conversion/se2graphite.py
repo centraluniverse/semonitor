@@ -69,8 +69,9 @@ if __name__ == "__main__":
                         1,
                         1,
                     )
-                # Set the dst parameter in mktime to -1, so that the system determines whether dst is in effect!
-                # Without this, when dst is in effect, the timeStamp is 3600 seconds into the future!
+                # Set the dst parameter in mktime to -1, so that the system
+                # determines whether dst is in effect! Without this, when dst is
+                # in effect, the timeStamp is 3600 seconds into the future!
                 timeStamp = time.mktime(
                     (
                         int(year),
