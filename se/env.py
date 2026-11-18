@@ -1,4 +1,9 @@
-# SolarEdge command line argument parsing and validation
+"""
+SolarEdge command line argument parsing and validation.
+
+Defines the run mode derived from the arguments, and parses and validates
+the command line.
+"""
 
 import argparse
 import logging
@@ -26,9 +31,11 @@ RunMode = namedtuple(
 )
 
 
-# argument parser class
 class SeArgumentParser(argparse.ArgumentParser):
+    """Argument parser that prints its usage and exits on errors."""
+
     def error(self, message):
+        """Print usage, write the message to stderr and exit with status 2."""
         self.print_usage()
         sys.stderr.write(message + "\n")
         sys.exit(2)
@@ -84,6 +91,12 @@ def validated_slaves(slave_str):
 
 # the parser of the command line
 def _make_parser():
+    """
+    Build the parser of the command line arguments.
+
+    Returns:
+        The parser, without any arguments parsed yet.
+    """
     parser = SeArgumentParser(
         description="Parse Solaredge data to extract inverter and optimizer telemetry",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -93,7 +106,7 @@ def _make_parser():
         dest="append",
         action="store_true",
         default=False,
-        help="append to output file if the file exists",
+        help="append to existing output files",
     )
     parser.add_argument(
         "-b",
@@ -172,8 +185,8 @@ def _make_parser():
     return parser
 
 
-# configure the logging of the root logger
 def _configure_logging(args):
+    """Configure the root logger from the log file and verbosity options."""
     stream_formatter = logging.Formatter("%(message)s")
     file_formatter = logging.Formatter(
         "%(asctime)s %(message)s", datefmt="%b %d %H:%M:%S"
@@ -207,8 +220,16 @@ def _configure_logging(args):
     root_logger.addHandler(handler)
 
 
-# find out if the data source is a serial device
 def _is_serial_device(args):
+    """
+    Find out if the data source is a serial device.
+
+    Args:
+        args: The parsed arguments, of which datasource is normalized.
+
+    Returns:
+        True if the data source is a serial device.
+    """
     serial_device = False
     if args.datasource == "-":
         args.datasource = "stdin"
@@ -228,9 +249,9 @@ def _is_serial_device(args):
     return serial_device
 
 
-# validate the serial device
-# NB The mode of an RS232 device is not made active here, see Issue #12
 def _validate_serial(parser, args, *, serial_device):
+    """Validate the device type against the serial device."""
+    # NB The mode of an RS232 device is not made active here, see Issue #12
     if serial_device:
         args.following = True
         if args.type not in ["2", "4"]:
@@ -246,8 +267,17 @@ def _validate_serial(parser, args, *, serial_device):
         )
 
 
-# validate the master and command mode, and return if the mode is passive
 def _validate_mode(parser, args):
+    """
+    Validate the master and command mode.
+
+    Args:
+        parser: The parser, to report an invalid combination of options.
+        args: The parsed arguments.
+
+    Returns:
+        True if the mode is passive.
+    """
     if args.master:
         passive_mode = False
         if args.type != "4":
@@ -269,8 +299,8 @@ def _validate_mode(parser, args):
     return passive_mode
 
 
-# print out the arguments and options
 def _log_arguments(args):
+    """Log the arguments and options."""
     for k, v in sorted(vars(args).items()):
         shown = v
         if k == "commands":
@@ -282,12 +312,14 @@ def _log_arguments(args):
         logger.info("%s: %s", k, shown)
 
 
-# get arguments from the command line and validate them
 def getArgs():
     """
-    Get the arguments from the command line and validate them.
+    Get the arguments from the command line, or argv, and validate them.
 
     Also configures logging from the verbosity option.
+
+    Args:
+        argv: The arguments to parse, those of the process when not given.
 
     Returns:
         A tuple (args, mode), where args is the parsed namespace and mode is

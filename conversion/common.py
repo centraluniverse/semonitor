@@ -30,17 +30,24 @@ def open_input(args):
 
 def unwrap_metricsDict(mydict):
     """
-    An iterator/generator function to "flatten" (aka unwrap) the attributes stored in the parsed device dictionaries,
-    after they have been wrapped in the device type and device id identifiers. The inverse (sort of) to the
-    ParseDevice.wrap_in_ids method.
+    Flatten (unwrap) the attributes stored in the parsed device dictionaries.
 
-    Will work equally well on a json.loads dictionary (where the JSON was created from a parsed device dictionary).
+    A generator that yields each device's attributes after they have been
+    wrapped in the device type and device id identifiers. The inverse (sort of)
+    to the ParseDevice.wrap_in_ids method.
 
-    :param mydict: A nested set of dictionaries, the deepest level of which records the attributes for a device. "Date"
-     must be one of those device attributes, because that is how the algorithm knows it has reached the bottom of the
-     nest.
+    Will work equally well on a json.loads dictionary (where the JSON was
+    created from a parsed device dictionary).
 
-    :return: A Graphite-style structured name for the device instance, and a {name: value} dictionary of its attributes.
+    Args:
+        mydict: A nested set of dictionaries, the deepest level of which
+            records the attributes for a device. "Date" must be one of those
+            device attributes, because that is how the algorithm knows it has
+            reached the bottom of the nest.
+
+    Yields:
+        A tuple of a Graphite-style structured name for the device instance,
+        and a {name: value} dictionary of its attributes.
     """
 
     def nice(k):

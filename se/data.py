@@ -1,4 +1,9 @@
-# SolarEdge data interpretation
+"""
+SolarEdge data interpretation.
+
+Turns the payload of each protocol message into Python values, and formats
+values back into bytes. Parsed device data is written out as JSON lines.
+"""
 
 import codecs
 import json
@@ -61,8 +66,20 @@ NO_ARGUMENTS = frozenset(
 )
 
 
-# parse the message data
 def parseData(function, data):
+    """
+    Decode the payload of a protocol message.
+
+    Functions without arguments, and functions with no known parser, are
+    returned as a hex string of their data. Unknown functions are logged.
+
+    Args:
+        function: The function code of the message.
+        data: The payload bytes of the message.
+
+    Returns:
+        The decoded payload, a dict for most functions, or a hex string.
+    """
     if function in NO_ARGUMENTS:
         return "".join(x.encode("hex") for x in data)
     parser = DATA_PARSERS.get(function)
@@ -74,6 +91,16 @@ def parseData(function, data):
 
 
 def parseEnergyStats(data):
+    """
+    Decode energy statistics: today, month, year, total energy, and time.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "Eday", "Emon", "Eyear" and "Etot" energies, and the
+        "Time1" time as a string.
+    """
     (Eday, Emon, Eyear, Etot, Time1) = struct.unpack("<ffffL", data[0:20])
     return {
         "Eday": Eday,
@@ -85,12 +112,30 @@ def parseEnergyStats(data):
 
 
 def parseParam(data):
+    """
+    Decode a single 16-bit little-endian parameter.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "param".
+    """
     param = struct.unpack("<H", data)[0]
     logger.data("param:     %04x", param)
     return {"param": param}
 
 
 def parseVersion(data):
+    """
+    Decode a version as a "major.minor" string with 4-digit parts.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "version" string.
+    """
     (major, minor) = struct.unpack("<HH", data[0:4])
     version = f"{major:04d}.{minor:04d}"
     logger.data("version:    %s", version)
@@ -98,10 +143,29 @@ def parseVersion(data):
 
 
 def formatParam(param):
+    """
+    Pack a 16-bit parameter as little-endian bytes.
+
+    Args:
+        param: The parameter to pack.
+
+    Returns:
+        The packed bytes.
+    """
     return struct.pack("<H", param)
 
 
 def parseOffsetLength(data):
+    """
+    Decode a 32-bit offset and length, and keep the rest as the data.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "offset" and "length", and the rest of the payload as
+        "data".
+    """
     (offset, length) = struct.unpack("<LL", data[0:8])
     logger.data("offset:   %08x", offset)
     logger.data("length:   %08x", length)
@@ -109,16 +173,43 @@ def parseOffsetLength(data):
 
 
 def parseLong(data):
+    """
+    Decode a single 32-bit little-endian parameter.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "param".
+    """
     param = struct.unpack("<L", data)[0]
     logger.data("param:     %08x", param)
     return {"param": param}
 
 
 def formatLong(param):
+    """
+    Pack a 32-bit parameter as little-endian bytes.
+
+    Args:
+        param: The parameter to pack.
+
+    Returns:
+        The packed bytes.
+    """
     return struct.pack("<L", param)
 
 
 def parseValueType(data):
+    """
+    Decode a 32-bit value followed by a 16-bit type.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "value" and the "type".
+    """
     (value, dataType) = struct.unpack("<LH", data)
     logger.data("value:     %08x", value)
     logger.data("type:      %04x", dataType)
@@ -126,10 +217,29 @@ def parseValueType(data):
 
 
 def formatValueType(value, dataType):
+    """
+    Pack a value and a data type as little-endian bytes.
+
+    Args:
+        value: The value to pack.
+        dataType: The data type to pack.
+
+    Returns:
+        The packed bytes.
+    """
     return struct.pack("<HL", value, dataType)
 
 
 def parseParamValue(data):
+    """
+    Decode a 16-bit parameter followed by a 32-bit value.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "param" and the "value".
+    """
     (param, value) = struct.unpack("<HL", data)
     logger.data("param:     %04x", param)
     logger.data("value:     %08x", value)
@@ -137,10 +247,29 @@ def parseParamValue(data):
 
 
 def formatParamValue(param, value):
+    """
+    Pack a 16-bit parameter and a 32-bit value as little-endian bytes.
+
+    Args:
+        param: The parameter to pack.
+        value: The value to pack.
+
+    Returns:
+        The packed bytes.
+    """
     return struct.pack("<HL", param, value)
 
 
 def parseTime(data):
+    """
+    Decode a Unix time and a signed time zone offset in seconds.
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with the "time" and the "tz" offset.
+    """
     (timeValue, tzOffset) = struct.unpack("<Ll", data)
     logger.data("time:      %s", time.asctime(time.gmtime(timeValue)))
     logger.data("tz:        UTC%+d", tzOffset / 60 / 60)
@@ -148,27 +277,55 @@ def parseTime(data):
 
 
 def formatTime(timeValue, tzOffset):
+    """
+    Pack a Unix time and a signed time zone offset as bytes.
+
+    Args:
+        timeValue: The Unix time to pack.
+        tzOffset: The time zone offset in seconds to pack.
+
+    Returns:
+        The packed bytes.
+    """
     return struct.pack("<Ll", timeValue, tzOffset)
 
 
-# parse status data
 def parseStatus(data):
-    #    if len(data) > 0:
-    #        status = struct.unpack("<HHHHHHH", data)
-    #        logger.data("status", "%d "*len(status) % status)
-    #    return {"status": status}
+    """
+    Log the status data as a hex dump, and return a status of 0.
+
+    The status is not decoded yet, so the result is always 0. It is believed
+    to be seven unsigned 16 bit values (struct format "<HHHHHHH").
+
+    Args:
+        data: The payload bytes of the message.
+
+    Returns:
+        A dict with a "status" of 0.
+    """
     for line in se.logutils.format_data(data):
         logger.data(line)
     return {"status": 0}
 
 
-# parse device data
 def parseDeviceData(data):
+    """
+    Parse the devices in the payload of a performance data message.
+
+    Each device has an 8-byte header with its type, ID and length. Inverters,
+    optimizers and events are grouped under their own keys. Any other device
+    is parsed by ParseDevice and merged into the result.
+
+    Returns:
+        A dict with "inverters", "optimizers" and "events" keys, and the
+        attributes of any other devices.
+    """
     devHdrLen = 8
     invDict = {}
     optDict = {}
     eventDict = {}
-    # Add a master dictionary, to store anything parsed by ParseDevice, indexed by the `dev_type`
+    # Add a master dictionary, to store anything parsed by ParseDevice,
+    # indexed by the `dev_type`
     devsDict = {}
 
     dataPtr = 0
@@ -199,9 +356,11 @@ def parseDeviceData(data):
             invDict[seId] = parseInvData(
                 seId, invItems, data[dataPtr : dataPtr + devLen]
             )
-            # Correct odd case where SolarEdge inverter sends NaN value in opposite byte order to all other float values
-            # i.e. SolarEdge sends b'\xff\xff\x7f\xff' which in little endian format unpacks as -3.402... * 10 ** 38
-            # but b'\xff\x7f\xff\xff' unpacks as NaN, which is the "correct" value when this byte pattern is seen.
+            # Correct odd case where SolarEdge inverter sends NaN value in
+            # opposite byte order to all other float values i.e. SolarEdge sends
+            # b'\xff\xff\x7f\xff' which in little endian format unpacks as
+            # -3.402... * 10 ** 38 but b'\xff\x7f\xff\xff' unpacks as NaN, which
+            # is the "correct" value when this byte pattern is seen.
             if invDict[seId]["Pmax"] < -3 * 10**38:
                 invDict[seId]["Pmax"] = float("nan")
             logDevice("inverter:     ", seType, seId, devLen, invDict[seId])
@@ -216,8 +375,8 @@ def parseDeviceData(data):
             )
             logDevice("event:         ", seType, seId, devLen, eventDict[seId])
         else:  # unknown device type, or one that ParseDevice can handle
-            # In production you would usually set explorer to False, to prevent excessively long (and mostly useless)
-            # parse results for unknown device types.
+            # In production, set explorer to False to prevent excessively long,
+            # mostly useless parse results for unknown device types.
             parsedDevice = ParseDevice(
                 data[dataPtr - devHdrLen : dataPtr + devLen], explorer=False
             )
@@ -233,7 +392,7 @@ def parseDeviceData(data):
             )
 
         dataPtr += devLen
-    # A bit of a lazy way out, but embed the pre-existing dictionaries into devsDict
+    # A bit of a lazy way out, embed the pre-existing dictionaries into devsDict
     devsDict["inverters"] = invDict
     devsDict["optimizers"] = optDict
     devsDict["events"] = eventDict
@@ -260,6 +419,17 @@ DATA_PARSERS = {
 
 
 def parseEventData(seId, eventItems, devData):
+    """
+    Decode the data of a wake or sleep event device.
+
+    Args:
+        seId: The ID of the device.
+        eventItems: The names of the data items of an event.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     # unpack data and map to items
     seEventData = [
         struct.unpack(eventInFmt, devData[:invInFmtLen])[i] for i in eventIdx
@@ -273,6 +443,17 @@ def parseEventData(seId, eventItems, devData):
 
 
 def parseInvData(seId, invItems, devData):
+    """
+    Decode the data of a single phase inverter.
+
+    Args:
+        seId: The ID of the device.
+        invItems: The names of the data items of an inverter.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     # unpack data and map to items
     seInvData = [
         struct.unpack(invInFmt, devData[:invInFmtLen])[i] for i in invIdx
@@ -281,6 +462,17 @@ def parseInvData(seId, invItems, devData):
 
 
 def parseInv3PhData(seId, invItems, devData):
+    """
+    Decode the data of a three phase inverter.
+
+    Args:
+        seId: The ID of the device.
+        invItems: The names of the data items of a three phase inverter.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     # unpack data and map to items
     seInvData = [
         struct.unpack(inv3PhInFmt, devData[:inv3PhInFmtLen])[i]
@@ -290,6 +482,17 @@ def parseInv3PhData(seId, invItems, devData):
 
 
 def parseOptData(seId, optItems, devData):
+    """
+    Decode the data of an optimizer.
+
+    Args:
+        seId: The ID of the device.
+        optItems: The names of the data items of an optimizer.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     # unpack data and map to items
     seOptData = [
         struct.unpack(optInFmt, devData[:optInFmtLen])[i] for i in optIdx
@@ -299,6 +502,17 @@ def parseOptData(seId, optItems, devData):
 
 
 def parseNewOptData(seId, optItems, devData):
+    """
+    Decode the data of an optimizer in the newer format.
+
+    Args:
+        seId: The ID of the device.
+        optItems: The names of the data items of an optimizer.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     data = bytearray()
     data.extend(devData)
     (timeStamp, uptime) = struct.unpack("<LH", devData[0:6])
@@ -314,6 +528,17 @@ def parseNewOptData(seId, optItems, devData):
 
 
 def parseS440OptData(seId, optItems, devData):
+    """
+    Decode S440 optimizer data, which has no energy or temperature.
+
+    Args:
+        seId: The ID of the device.
+        optItems: The names of the data items of an optimizer.
+        devData: The bytes of the data of the device.
+
+    Returns:
+        The dict of the data items of the device, see dev_data_dict.
+    """
     data = bytearray()
     data.extend(devData)
     (timeStamp, uptime) = struct.unpack("<LH", devData[0:6])
@@ -329,8 +554,23 @@ def parseS440OptData(seId, optItems, devData):
     )
 
 
-# create a dictionary of device data items
 def devDataDict(seId, itemNames, itemValues):
+    """
+    Build the dict of a device's data items.
+
+    The first value is a timestamp, which is split into "Date" and "Time".
+    An invalid timestamp gives "invalid" for both.
+
+    Args:
+        seId: The ID of the device.
+        itemNames: The names of the data items, the first three of which are
+            not used as the first value is the timestamp.
+        itemValues: The values of the data items, the timestamp first.
+
+    Returns:
+        A dict with the "Date", "Time" and "ID" of the device, and each of the
+        other data items by its name.
+    """
     devDict = {}
     try:
         devDict["Date"] = formatDateStamp(itemValues[0])
@@ -345,8 +585,12 @@ def devDataDict(seId, itemNames, itemValues):
     return devDict
 
 
-# write device data to output files
 def writeData(msgDict, outFile):
+    """
+    Write a message dict to outFile as one line of sorted JSON.
+
+    Nothing is written if outFile is None or empty.
+    """
     if outFile:
         Seq.out += 1
         msg = json.dumps(msgDict, sort_keys=True)
@@ -355,24 +599,48 @@ def writeData(msgDict, outFile):
         outFile.flush()
 
 
-# remove the extra bit that is sometimes set in a device ID and uppercase the letters
 def parseId(seId):
+    """Return a device ID as uppercase hex, without its extra high bit."""
     return ("%x" % (seId & 0xFF7FFFFF)).upper()
 
 
-# format a date
 def formatDateStamp(timeStamp):
+    """
+    Format a Unix timestamp as a local date, YYYY-MM-DD.
+
+    Args:
+        timeStamp: The Unix timestamp.
+
+    Returns:
+        The date as a string.
+    """
     return time.strftime("%Y-%m-%d", time.localtime(timeStamp))
 
 
-# format a time
 def formatTimeStamp(timeStamp):
+    """
+    Format a Unix timestamp as a local time, HH:MM:SS.
+
+    Args:
+        timeStamp: The Unix timestamp.
+
+    Returns:
+        The time as a string.
+    """
     return time.strftime("%H:%M:%S", time.localtime(timeStamp))
 
 
-# format a timestamp using asctime
-# return the hex value if timestamp is invalid
 def formatDateTime(timeStamp):
+    """
+    Format a Unix timestamp as a local time string, using asctime.
+
+    Args:
+        timeStamp: The Unix timestamp.
+
+    Returns:
+        The time string, the hex of the packed value if the timestamp is out
+        of range, and "invalid" for other bad values.
+    """
     try:
         return time.asctime(time.localtime(timeStamp))
     except ValueError:
@@ -382,8 +650,17 @@ def formatDateTime(timeStamp):
         return "invalid"
 
 
-# formatted print of device data
 def logDevice(devType, seType, seId, devLen, devData):
+    """
+    Log a header line for a device, then each of its data items.
+
+    Args:
+        devType: The device type, such as inverter or batteries.
+        seType: The device type code, such as DEV_INVERTER.
+        seId: The ID of the device, as formatted by parseId.
+        devLen: The length in bytes of the data of the device.
+        devData: The dict of the data items of the device.
+    """
     logger.data("%s %s type: %04x len: %04x", devType, seId, seType, devLen)
     for k, v in devData.items():
         logger.data("    %s : %s", k, v)

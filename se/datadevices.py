@@ -1,33 +1,40 @@
 """
-The seDataDevices module defines the ParseDevice class, and a number of subclasses thereof.
+The seDataDevices module defines the ParseDevice class and its subclasses.
 
-ParseDevice and it's subclasses are intended to be a reasonably straightforward way of adding new (seType) devices to the
-list that the semonitor suite can recognize and can parse.
+ParseDevice and it's subclasses are intended to be a reasonably straightforward
+way of adding new (se_type) devices to the list that the semonitor suite can
+recognize and can parse.
 
-ParseDevice is a subclass of a dictionary, with a tailored __init__ method. Given a block of seData from a pcap file,
-the __init__ method will parse it, and populate the ParseDevice instance with entries mapping items to their parsed
+ParseDevice is a subclass of a dictionary, with a tailored __new__ method. Given
+a block of seData from a pcap file, the __new__ method will parse it, and
+populate the ParseDevice instance with entries mapping items to their parsed
 value, as found in the data block.
 
-The top level ParseDevice only performs a rudimentary parse of the data, and returns almost all of it as a hex string.
+The top level ParseDevice only performs a rudimentary parse of the data, and
+returns almost all of it as a hex string.
 
-Subclasses of ParseDevice (e.g. ParseDevice_0x0030) contain more extensive item
-definitions (stored in the field_defs list) and
-populate the dictionary in a more sensible and useful way. Each subclass is tuned to a specific seType. se_type defines
-the seType the subclass is designed to parse, and field_defs lists the
-definitions for blocks of data of that seType.
+Subclasses of ParseDevice (e.g. ParseDevice0x0030) contain more extensive item
+definitions (stored in the field_defs list) and populate the dictionary in a
+more sensible and useful way. Each subclass is tuned to a specific se_type.
+se_type defines the value the subclass is designed to parse, and field_defs
+lists the definitions for blocks of data of that se_type.
 
-Thanks to some fancy footwork in the __new__ method of ParseDevice itself, it is only ever necessary to try to create an
-instance of ParseDevice (i.e. to code `ParseDevice(data)`). ParseDevice.__new__ determines the seType of the block of data, by
-examining the standard header block in the data. Then it searches through all the subclasses of ParseDevice that have
-been defined, and if one 'tuned' to the seType of the block of data being parsed is found, creates an instance of that
-specialized subclass.
+Thanks to some fancy footwork in the __new__ method of ParseDevice itself, it is
+only ever necessary to try to create an instance of ParseDevice (i.e. to code
+`ParseDevice(data)`). ParseDevice.__new__ determines the se_type of the block of
+data, by examining the standard header block in the data. Then it searches
+through all the subclasses of ParseDevice that have been defined, and if one
+'tuned' to the se_type of the block of data being parsed is found, creates an
+instance of that specialized subclass.
 
-There is one extra special subclass of ParseDevice, namely ParseDevice_Explorer. It is *not* intended for production use.
-It operates without any item definitions at all. Instead it works its way through the block of seData, in 2-byte
-increments, parsing the next 4 bytes in almost every way they could be parsed. Almost all of the parsed data items will
-be nonsense, but perusing the parsed device - for example by using se2csv and then opening the csv file - may help with
-the deciphering of new seType devices. It is an alternative, of sorts, to examining the relevant part of the pcap file
-using a hex editor.
+There is one extra special subclass of ParseDevice, namely ParseDeviceExplorer.
+It is *not* intended for production use. It operates without any item
+definitions at all. Instead it works its way through the block of seData, in
+2-byte increments, parsing the next 4 bytes in almost every way they could be
+parsed. Almost all of the parsed data items will be nonsense, but perusing the
+parsed device - for example by using se2csv and then opening the csv file - may
+help with the deciphering of new se_type devices. It is an alternative, of
+sorts, to examining the relevant part of the pcap file using a hex editor.
 """
 
 import binascii
@@ -41,7 +48,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Spacer field for documenting field definitions more neatly, used for convenience
+# Spacer field for documenting field definitions more neatly, for convenience
 sp = "\n\t\t\t\t\t\t: "
 # Create a "utility" constant, to use later to make code less verbose
 nan = float("nan")
@@ -78,15 +85,20 @@ def is_small(name):
 
 class ParseDevice(dict):
     """
-    ParseDevice itself can only perform a very basic parse of a block of seData from a pcap file. Its main purposes
-    are:
+    ParseDevice itself can only do a very basic parse of a seData block.
 
-        to provide a suite of standard methods shared by all the subclasses (and in particular the parseDevTable method
-        which given a field_defs list, will parse the seData block accordingly);
-            and
-        to have a 'clever' __new__ method, which redirects the creation of a ParseDevice to the creation of a subclass of
-        a ParseDevice which specializes in the particular seType encountered in the current block of seData (provided of
-        course that a specialized subclass for that seType has been defined).
+    The block of seData is from a pcap file.
+
+    Its main purposes are:
+
+        to provide a suite of standard methods shared by all the subclasses (and
+        in particular the parse_dev_table method which given a field_defs list,
+        will parse the seData block accordingly); and
+        to have a 'clever' __new__ method, which redirects the creation of a
+        ParseDevice to the creation of a subclass of a ParseDevice which
+        specializes in the particular seType encountered in the current block of
+        seData (provided of course that a specialized subclass for that seType
+        has been defined).
     """
 
     se_type = (
@@ -95,53 +107,63 @@ class ParseDevice(dict):
     _devName = "Unknown_device"
     dev_type = f"{_devName}_{se_type:#06x}"
 
-    # DEFINITIONS for items in new devices, filled in for subclasses of ParseDevice.
+    # DEFINITIONS for items in new devices, filled in for subclasses.
     #
     # The definition has to be a list not a mapping because field order matters!
     # Each field definition is (also) a list, with 6 members, namely
-    # [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV) True or False, comment]
+    # [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV) True or False, comment]  # noqa: W505
 
     field_defs: ClassVar[list[list[Any]]] = [
-        # The following standard device header fields are automatically parsed for all device types.
-        # These items do *not* need to be defined!
-        # [2, 'H', 'seType', lambda hex: '{:#06x}'.format(hex), False, "Identifies the type of this SolarEdge data block],
-        # [4, 'L', 'seId', parseId, False, "Identifies the SolarEdge device"],
-        # [2, 'H', 'devLen', None, False, "Length in bytes of the data block"],
+        # The following standard device header fields are automatically parsed
+        # for all device types.
+        # These items do *not* need to be defined! They are:
+        # - seType: 2 bytes ('H'), identifies the type of this SolarEdge data
+        #   block, shown as a 4 digit hex number
+        # - seId: 4 bytes ('L'), identifies the SolarEdge device, formatted by
+        #   parse_id
+        # - devLen: 2 bytes ('H'), the length in bytes of the data block
     ]
 
     # DERIVATIONS, optional, can be left empty if not required.
     #
     # List of names of derived items.
-    # Useful for documenting the interpretation of the derived values, and is also
-    # used to set the default values (in case the condition which
-    # triggers the derivation does not occur at a particular timeStamp) - see the setDerivationDefaults method.
+    # Useful for documenting the interpretation of the derived values, and is
+    # also used to set the default values (in case the condition which
+    # triggers the derivation does not occur at a particular timeStamp) - see
+    # the set_derivation_defaults method.
 
     # Each "definition" is itself a list, comprising:
     # [paramName, paramDefault, out (to CSV) True or False, comment]
     # paramDefault is the value itself, e.g. 0, 0.0, "" or nan.
     #
-    # NB *** It is (much) simpler to describe the actual derivation for a particular item in Python code
-    # (within the subclass that needs it) than to develop a completely new "syntax" for describing derivations!
-    # see the codeDerivations method in the subclasses of ParseDevice for examples.
+    # NB *** It is (much) simpler to describe the actual derivation for a
+    # particular item in Python code (within the subclass that needs it) than to
+    # develop a completely new "syntax" for describing derivations!
+    # see the code_derivations method in the subclasses of ParseDevice for
+    # examples.
 
     _derivn: ClassVar[list[list[Any]]] = [
         # [paramName, paramDefault, out (to CSV) True or False, comment]
     ]
 
     # HYPOTHESES, optional, list of (text, predicate) pairs for conditions which
-    # I expect to be always true. The predicate takes the parsed device, the
-    # text is what gets logged when it is false. Useful for generating debug
-    # alerts in the event of "new" unexpected values appearing in data items.
-    # See ParseDevice_0x0030 for an example, and is_zero and is_small for the
+    # I expect to be always true.
+    # The predicate takes the parsed device, the text is what gets logged when
+    # it is false.
+    # Useful for generating debug alerts in the event of "new" unexpected values
+    # appearing in data items.
+    # See ParseDevice0x0030 for an example, and is_zero and is_small for the
     # common cases.
     _hypotheses: ClassVar[list[tuple[str, Callable[[Any], bool]]]] = []
 
     def __new__(cls, data, *, explorer=False):
-        # Some fancy footwork so that I can always start to create a ParseDevice, but actually get a subclass which is
-        # appropriate for the seType encountered in the data block (provided a subclass specific to the seType has been
-        # defined, of course).
-        devHdrLen = 8
-        (seType, _se_id, _dev_len) = struct.unpack("<HLH", data[0:devHdrLen])
+        """Return a parsed instance of the subclass for the data's seType."""
+        # Some fancy footwork so that I can always start to create a
+        # ParseDevice, but actually get a subclass which is appropriate for the
+        # seType encountered in the data block (provided a subclass specific to
+        # the se_type has been defined, of course).
+        dev_hdr_len = 8
+        (se_type, _se_id, _dev_len) = struct.unpack("<HLH", data[0:dev_hdr_len])
 
         # Search for a subclass which can handle this se_type
         for subclass in cls.__subclasses__():
@@ -150,17 +172,21 @@ class ParseDevice(dict):
 
         # Otherwise either return a ParseDevice_Explorer (explorer=True),
         # which is a special subclass which will parse almost anything,
-        # albeit with quite a number of nonsense parsings interspersed with occasional correctly parsed fields,
-        # or just return a bare minimum instance of a dictionary (explorer=False).
+        # albeit with quite a number of nonsense parsings interspersed with
+        # occasional correctly parsed fields, or just return a bare minimum
+        # instance of a dictionary (explorer=False).
         if explorer:
-            # return a special ParseDevice which tries almost every field parsing it knows about
+            # return a special ParseDevice which tries almost every field
+            # parsing it knows about
             return ParseDevice_Explorer(data)
-        # return an instance of a basic dictionary (the base class for ParseDevice itself)
+        # return an instance of a basic dictionary (the base class for
+        # ParseDevice itself)
         newInstance = super().__new__(cls)
-        # (Re)setting a basically empty (unknown) definition for this instance is crucial
-        # because you may have already encountered another unknown device with a *different* length and field_defs,
-        # and the parseDevTable method updates the *class* definition dynamically if it encounters more data than it
-        # expects.
+        # (Re)setting a basically empty (unknown) definition for this instance
+        # is crucial because you may have already encountered another unknown
+        # device with a *different* length and field_defs, and the parseDevTable
+        # method updates the *class* definition dynamically if it encounters
+        # more data than it expects.
         newInstance.field_defs = [
             [
                 4,
@@ -175,20 +201,45 @@ class ParseDevice(dict):
 
     @staticmethod
     def parseId(seId):
+        """
+        Format a device id as an upper-case hex string, with bit 23 cleared.
+
+        Args:
+            seId: The device id from the header of a data block.
+
+        Returns:
+            The device id as a string.
+        """
         return ("%x" % (seId & 0xFF7FFFFF)).upper()
 
-    # format a date
     @staticmethod
     def formatDateStamp(timeStamp):
+        """
+        Format a Unix timestamp as a local date, YYYY-MM-DD.
+
+        Args:
+            timeStamp: The Unix timestamp.
+
+        Returns:
+            The date as a string, or "invalid" if the timestamp is not valid.
+        """
         try:
             return time.strftime("%Y-%m-%d", time.localtime(timeStamp))
         except (OverflowError, OSError, TypeError, ValueError) as ex:
             logger.info("Invalid timestamp: %s %s", timeStamp, ex)
             return "invalid"
 
-    # format a time
     @staticmethod
     def formatTimeStamp(timeStamp):
+        """
+        Format a Unix timestamp as a local time, HH:MM:SS.
+
+        Args:
+            timeStamp: The Unix timestamp.
+
+        Returns:
+            The time as a string, or "invalid" if the timestamp is not valid.
+        """
         try:
             return time.strftime("%H:%M:%S", time.localtime(timeStamp))
         except (OverflowError, OSError, TypeError, ValueError) as ex:
@@ -199,10 +250,14 @@ class ParseDevice(dict):
     @staticmethod
     def hexData(data):
         """
-        Convert a string of bytes into a nicely formatted string of the hex representation of each byte.
+        Convert a string of bytes into a nicely formatted hex string.
 
-        :param data: A string of bytes.
-        :return: A longer string, containing a hex representation of the data bytes, formatted for easier reading.
+        Args:
+            data: A string of bytes.
+
+        Returns:
+            A longer string, containing a hex representation of the data
+            bytes, formatted for easier reading.
         """
         lineSize = 16
 
@@ -222,22 +277,42 @@ class ParseDevice(dict):
     @staticmethod
     def unhexData(hexData):
         """
-        Convert a hex representation into a string of bytes, i.e. the inverse of hexData.
+        Convert a hex representation into bytes, the inverse of hexData.
 
-        :param hexData: String, containing a (must be valid) hex representation of some bytes.
-        :return: The string of bytes corresponding to hexData.
+        Args:
+            hexData: String, containing a (must be valid) hex representation
+                of some bytes.
+
+        Returns:
+            The string of bytes corresponding to hexData.
         """
         return binascii.unhexlify(hexData.replace("|", "").replace(" ", ""))
 
-    # ParseDevice(data, explorer=...) hands its arguments to __init__ as well
     def __init__(self, data, **_kwargs):
+        """
+        Parse the data block, then run the derivations and hypothesis checks.
+
+        Args:
+            data: The data block to parse.
+            **_kwargs: Ignored. ParseDevice(data, explorer=...) passes the
+                keywords of __new__ to __init__ too.
+        """
         self.parseDevTable(data)
         self.setDerivationDefaults()
         self.codeDerivations()
         self.checkHypotheses()
 
     def parseDevTable(self, data):
+        """
+        Parse the header and every field of the data block into self.
 
+        Args:
+            data: The data block to parse.
+
+        Raises:
+            ValueError: If field_defs describe more bytes than the data block
+                contains.
+        """
         dataPtr = 0
         devHdrLen = 8
         # device header
@@ -247,11 +322,12 @@ class ParseDevice(dict):
         dataPtr += devHdrLen
 
         # For (almost) all subclasses, dev_type will already have this value.
-        # This is necessary only when a default catchall parse is happening, because a specific parser for seType has
-        # not been defined.
+        # This is necessary only when a default catchall parse is happening,
+        # because a specific parser for se_type has not been defined.
         self.dev_type = f"{self._devName}_{seType:#06x}"
-        # Store seId as an attribute for later use as part of the standard "dictionary of dictionaries" wrapper when
-        # a parsed instance is converted to json.
+        # Store _seId as an attribute for later use as part of the standard
+        # "dictionary of dictionaries" wrapper when a parsed instance is
+        # converted to json.
         self._seId = self.parseId(seId)
 
         self.update(
@@ -267,7 +343,8 @@ class ParseDevice(dict):
             msg = f"You have defined more bytes, {self.field_defs_len}, than the message contains, {devLen}"
             raise ValueError(msg)
         if self.field_defs_len < devLen:
-            # By default, convert any remaining undefined bytes to their representation as a hexadecimal string.
+            # By default, convert any remaining undefined bytes to their
+            # representation as a hexadecimal string.
             self.field_defs.append(
                 [
                     devLen - self.field_defs_len,
@@ -293,24 +370,29 @@ class ParseDevice(dict):
             dataPtr += paramLen
 
     def _unpack_field(self, param_name, param_fmt, raw):
+        """Unpack the raw bytes of a field into self."""
         # Extract the field
         if param_fmt == "hex":
             self[param_name] = raw
-        # Check for a specific value which I believe should be interpreted as NaN
-        # In little endian format '\xff\xff\x7f\xff' unpacks as -3.402...*10**38.
+        # Check for a specific value I believe should be read as NaN
+        # In little endian format '\xff\xff\x7f\xff' unpacks as
+        # -3.402...*10**38.
         # But the SolarEdge messages seem to use it to signify "not reported".
-        # In all the cases I have encountered it makes more sense to interpret this particular float value as NaN
-        # rather than as a very large negative number, so that is what I do below.
-        # Note that if unpacked in **big** endian format, this special value actually unpacks as NaN.
-        # I suspect a legacy "bug" somewhere in the SolarEdge messages, but in the meantime just check the bytes
-        # and fix it.
+        # In all the cases I have encountered it makes more sense to interpret
+        # this particular float value as NaN rather than as a very large
+        # negative number, so that is what I do below.
+        # Note that if unpacked in **big** endian format, this special value
+        # actually unpacks as NaN.
+        # I suspect a legacy "bug" somewhere in the SolarEdge messages, but in
+        # the meantime just check the bytes and fix it.
         elif param_fmt == "f" and (raw == b"\xff\xff\x7f\xff"):
             self[param_name] = float("nan")
         else:
             self[param_name] = struct.unpack("<" + param_fmt, raw)[0]
             if "s" in param_fmt:
-                # Python 3.x requires that we convert byte string to Unicode string
-                # if the value is to be used (later on) as a dictionary key for nested fields
+                # Python 3.x requires that we convert byte string to Unicode
+                # string if the value is to be used (later on) as a dictionary
+                # key for nested fields
                 # Required for e.g. battery IDs
                 # Remove trailing 'null' character (i.e. 0x00) at the same time
                 self[param_name] = (
@@ -318,6 +400,7 @@ class ParseDevice(dict):
                 )
 
     def _format_field(self, param_name, out_format_fn):
+        """Format the value of a field in self, if it has a format."""
         # Optionally format the field
         if out_format_fn == "dateTime":
             try:
@@ -340,14 +423,15 @@ class ParseDevice(dict):
             self[param_name] = out_format_fn(self[param_name])
 
     def setDerivationDefaults(self):
+        """Set every derived item to its default value."""
         for paramName, paramDefault, _out, _comment in self._derivn:
             self[paramName] = paramDefault
 
     def codeDerivations(self):
-        # Subclasses should override this if they want to calculate any derivations.
-        pass
+        """Calculate derived items. Nothing here; subclasses override it."""
 
     def checkHypotheses(self):
+        """Log a warning for each hypothesis that does not hold."""
         for hypothesis, holds in self._hypotheses:
             if not holds(self):
                 msg = [
@@ -363,27 +447,42 @@ class ParseDevice(dict):
 
     def wrap_in_ids(self):
         """
-        "Wrap" the dictionary of parsed data items inside a "dictionary of dictionary" structure (like invDict etc)
-        based on the device type and device id(s), to uniquely identify each device instance. The standard
-        identifiers are dev_type and seId, but some device types (e.g. batteries and optimizers) may have alternative
-        and/or additional identifiers following the dev_type (in which case the subclass parsers for those devices
-        should override this method with their own identifiers).
+        Wrap the parsed items in a dict of dicts keyed by device identifiers.
 
-        The full name structure of the metric is embedded in the "dict of dict" structure, and so the data items
-        (aka metrics) from this device can be distinguished from any data items reported by other devices.
+        "Wrap" the dictionary of parsed data items inside a "dictionary of
+        dictionary" structure (like invDict etc) based on the device type and
+        device id(s), to uniquely identify each device instance. The standard
+        identifiers are dev_type and _seId, but some device types (e.g.
+        batteries and optimizers) may have alternative and/or additional
+        identifiers following the dev_type (in which case the subclass parsers
+        for those devices should override this method with their own
+        identifiers).
 
-        :return: The (parsed) device attributes, "wrapped" in dictionary of dictionaries based on device type and device
-          identifiers.
+        The full name structure of the metric is embedded in the "dict of dict"
+        structure, and so the data items (aka metrics) from this device can be
+        distinguished from any data items reported by other devices.
+
+        Returns:
+            The (parsed) device attributes, "wrapped" in dictionary of
+            dictionaries based on device type and device identifiers.
         """
         return {self.dev_type: {self._seId: self}}
 
     @classmethod
     def itemNames(cls):
-        # Extract some item name and definition length information that se2csv needs
+        """
+        Return the names of the items written to CSV and Graphite.
 
+        Extract some item name and definition length information that se2csv
+        needs.
+
+        Returns:
+            The list of item names, with Date and Time in place of dateTime.
+        """
         # devItemNames = ["seType", "seId", "devLen", "dev_type"] These are
         # "uninteresting" and will not be output to CSV
-        # Extract a list of the names of "interesting" items, that will routinely be sent to CSV and Graphite.
+        # Extract a list of the names of "interesting" items, that will
+        # routinely be sent to CSV and Graphite.
         devItemNames = [
             name
             for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
@@ -396,7 +495,8 @@ class ParseDevice(dict):
                 if out
             ]
         )
-        # Find the dateTime output format entry (if it exists) and insert additional separate Date and Time items
+        # Find the dateTime output format entry (if it exists) and insert
+        # additional separate Date and Time items
         try:
             iDateTime = [
                 outFmt
@@ -419,9 +519,12 @@ class ParseDevice(dict):
     @classmethod
     def itemDefs(cls):
         """
-        Produce a pretty report on the item definitions parsed by this class, and its subclasses.
+        Produce a pretty report on the item definitions parsed by this class.
 
-        :return: A formatted string, (usually) extracted from field_defs and
+        The report also covers its subclasses.
+
+        Returns:
+            A formatted string, (usually) extracted from field_defs and
             _derivn.
         """
         msg = [
@@ -470,11 +573,16 @@ class ParseDevice(dict):
 
 
 class ParseDevice_0x0030(ParseDevice):
+    """Parser for battery (se_type 0x0030) data blocks."""
+
     def __new__(cls, _data):
-        # Create a bare minimum instance of a dictionary. ALL subclasses of ParseDevice MUST do this.
-        # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
-        # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
-        # the recursion limit was reached!
+        """Create a bare dictionary instance, without ParseDevice.__new__."""
+        # Create a bare minimum instance of a dictionary. ALL subclasses of
+        # ParseDevice MUST do this.
+        # NB This step is essential, because otherwise, when this subclass was
+        # instantiated / created, it would call the __new__ method of
+        # ParseDevice itself, which would redirect the creation to this
+        # subclass, and so on until the recursion limit was reached!
         # PS Note that a more usual idiom would be super().__new__(cls), but that
         # is the __new__ of ParseDevice, which is what we are trying to avoid!
         return dict.__new__(cls)
@@ -484,7 +592,8 @@ class ParseDevice_0x0030(ParseDevice):
     dev_type = f"{_devName}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
-        #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
+        #  [paramLen, paramInFmt, paramName, outFormatFn (can be None),
+        #   out (to CSV or Graphite) True or False, comment]
         [
             4,
             "L",
@@ -579,27 +688,38 @@ class ParseDevice_0x0030(ParseDevice):
 
     def wrap_in_ids(self):
         """
-        "Wrap" the dictionary of parsed data items inside a "dictionary of dictionary" structure (like invDict etc)
-        based on the device type and device id(s), to uniquely identify each device instance. The standard
-        identifiers are dev_type and seId, but some device types (e.g. batteries and optimizers) may have alternative
-        and/or additional identifiers following the dev_type (in which case the subclass parsers for those devices
-        should override this method with their own identifiers).
+        Wrap the parsed items in a dict of dicts keyed by device identifiers.
 
-        The full name structure of the metric is embedded in this "dict of dict" structure, and so the data items
-        (aka metrics) from this device can be distinguished from any data items reported by other devices.
+        "Wrap" the dictionary of parsed data items inside a "dictionary of
+        dictionary" structure (like invDict etc) based on the device type and
+        device id(s), to uniquely identify each device instance. The standard
+        identifiers are dev_type and _seId, but some device types (e.g.
+        batteries and optimizers) may have alternative and/or additional
+        identifiers following the dev_type (in which case the subclass parsers
+        for those devices should override this method with their own
+        identifiers).
 
-        :return: The (parsed) device attributes, "wrapped" in dictionary of dictionaries based on device type and device
-          identifiers.
+        The full name structure of the metric is embedded in this "dict of dict"
+        structure, and so the data items (aka metrics) from this device can be
+        distinguished from any data items reported by other devices.
+
+        Returns:
+            The (parsed) device attributes, "wrapped" in dictionary of
+            dictionaries based on device type and device identifiers.
         """
         return {self.dev_type: {self._seId: {self["batteryId"]: self}}}
 
 
 class ParseDevice_0x0022(ParseDevice):
+    """Parser for meter (se_type 0x0022) data blocks, one record per recType."""
+
     def __new__(cls, _data):
+        """Create a bare dictionary instance, without ParseDevice.__new__."""
         # Create a bare minimum instance of a dictionary.
-        # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
-        # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
-        # the recursion limit was reached!
+        # NB This step is essential, because otherwise, when this subclass was
+        # instantiated / created, it would call the __new__ method of
+        # ParseDevice itself, which would redirect the creation to this
+        # subclass, and so on until the recursion limit was reached!
         return dict.__new__(cls)
 
     se_type = 0x0022
@@ -607,7 +727,8 @@ class ParseDevice_0x0022(ParseDevice):
     dev_type = f"{_devName}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
-        #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
+        #  [paramLen, paramInFmt, paramName, outFormatFn (can be None),
+        #   out (to CSV or Graphite) True or False, comment]
         [
             4,
             "L",
@@ -778,7 +899,7 @@ class ParseDevice_0x0022(ParseDevice):
             + "Wh, consumption when recType=3"
             + sp
             + "Wh, energy imported from grid during interval when recType=5 "
-            "(whenever TotalEfromGrid is static, EfromX=0)"
+            + "(whenever TotalEfromGrid is static, EfromX=0)"
             + sp
             + "always 0 when recType=7 (I expected E from battery but it does not match battery(0x0030).EOut)"
             + sp
@@ -835,35 +956,48 @@ class ParseDevice_0x0022(ParseDevice):
         is_zero("AlwaysZero_off34_int2"),
     ]
 
-    # ParseDevice(data, explorer=...) hands its arguments to __init__ as well
     def __init__(self, data, **_kwargs):
+        """Parse the data block; extra keyword arguments are ignored."""
         super().__init__(data)
 
     def codeDerivations(self):
-        # Filter out some sporadic 'NaN'-like values which appear in P2X.  The hex value is the BIG endian version
-        # of a Python NaN. Read as LITTLE endian it becomes "-3.2... 10^38" which is unlikely to be meant as a real value!
-        # Most of these are filtered out later, but occasionally if the interval is short one slips through anyway.
-        # Short intervals appear to happen about once a day, perhaps when the inverter is going to sleep for the night.
+        """Replace the bogus large negative P2X values with NaN."""
+        # Filter out some sporadic 'NaN'-like values which appear in P2X.  The
+        # hex value is the BIG endian version of a Python NaN. Read as LITTLE
+        # endian it becomes "-3.2... 10^38" which is unlikely to be meant as a
+        # real value!
+        # Most of these are filtered out later, but occasionally if the interval
+        # is short one slips through anyway.
+        # Short intervals appear to happen about once a day, perhaps when the
+        # inverter is going to sleep for the night.
         if self["P2X"] < -3 * 10**38:
             self["P2X"] = nan
 
     def wrap_in_ids(self):
         """
-        "Wrap" the dictionary of parsed data items inside a "dictionary of dictionary" structure (like invDict etc)
-        based on the device type and device id(s), to uniquely identify each device instance. The standard
-        identifiers are dev_type and seId, but some device types (e.g. batteries and optimizers) may have alternative
-        and/or additional identifiers following the dev_type (in which case the subclass parsers for those devices
-        should override this method with their own identifiers).
+        Wrap the parsed items in a dict of dicts keyed by device identifiers.
 
-        The full name structure of the metric is embedded in this "dict of dict" structure, and so the data items
-        (aka metrics) from this device can be distinguished from any data items reported by other devices.
+        "Wrap" the dictionary of parsed data items inside a "dictionary of
+        dictionary" structure (like invDict etc) based on the device type and
+        device id(s), to uniquely identify each device instance. The standard
+        identifiers are dev_type and _seId, but some device types (e.g.
+        batteries and optimizers) may have alternative and/or additional
+        identifiers following the dev_type (in which case the subclass parsers
+        for those devices should override this method with their own
+        identifiers).
 
-        Because there are multiple reported 0x0022 entries in a typical pcap file, all with the same timestamp, it is
-        *essential* to distinguish them by means of the recType, otherwise almost all the reported metrics end up being
-        overwritten by the next 0x0022 entry!
+        The full name structure of the metric is embedded in this "dict of dict"
+        structure, and so the data items (aka metrics) from this device can be
+        distinguished from any data items reported by other devices.
 
-        :return: The (parsed) device attributes, "wrapped" in dictionary of dictionaries based on device type and device
-          identifiers.
+        Because there are multiple reported 0x0022 entries in a typical pcap
+        file, all with the same timestamp, it is *essential* to distinguish them
+        by means of the recType, otherwise almost all the reported metrics end
+        up being overwritten by the next 0x0022 entry!
+
+        Returns:
+            The (parsed) device attributes, "wrapped" in dictionary of
+            dictionaries based on device type and device identifiers.
         """
         recTypeLabels = {
             3: "3_Consumption",
@@ -882,18 +1016,19 @@ class ParseDevice_Explorer(ParseDevice):
     """
     A special parser which tries several ways of interpreting each data item.
 
-    It tries out several different ways of interpreting each item in the data
-    message, and
-    reports *ALL* of them.
+    It reports *ALL* of them.
 
-    Most of the parsed values will be wrong, but hopefully by inspection you can find the parsings which make sense.
+    Most of the parsed values will be wrong, but hopefully by inspection you can
+    find the parsings which make sense.
 
-    Intended for exploring new device types by either looking at the raw json file, or by using se2csv and looking at
-    the csv file. Once the correct interpretations for each item have been determined, a new subclass of
+    Intended for exploring new device types by either looking at the raw json
+    file, or by using se2csv and looking at the csv file. Once the correct
+    interpretations for each item have been determined, a new subclass of
     ParseDevice tailored to those items should be constructed.
     """
 
     def __new__(cls, _data):
+        """Create a bare dictionary instance, without ParseDevice.__new__."""
         # Create a bare minimum instance of a dictionary.
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
@@ -911,16 +1046,17 @@ class ParseDevice_Explorer(ParseDevice):
         """
         Parse the data block in as many ways as possible.
 
-        A special exploratory parser, that works without a pre-defined list of
-        itemNames and definitions. Somewhere
-        among the plethora of parsed values it produces, there will be the correct interpretation of each item.
-        I hope!
+        It needs no predefined item definitions. Somewhere among the plethora of
+        parsed values it produces, there will be the correct interpretation of
+        each item. I hope!
 
-        It does presume all devices begin with a standard "seType, seId, devLen" header, which may not be correct.
+        It does presume all devices begin with a standard "seType, seId, devLen"
+        header, which may not be correct.
 
-        :param data: The data to be parsed, in as many ways as possible.
-        :return: None, but entries are added into self (the dictionary of
-            itemName -> parsedValue)
+        The parsed values are added into self, as itemName to parsedValue.
+
+        Args:
+            data: The data to be parsed, in as many ways as possible.
         """
         dataPtr = 0
         devHdrLen = 8
@@ -932,10 +1068,11 @@ class ParseDevice_Explorer(ParseDevice):
         self.se_type = seType
         self._field_defs_len = devLen
         # For standard subclasses, dev_type will already have this value.
-        # However ParseDevice_Explorer can be used as a default parser, when a new device is encountered, in which case
-        # the actual instance value of seType would be unknown when the seDataDevices module was imported (or in other
-        # words, ParseDevice_Explorer.se_type will contain a nonsense value
-        # which must be corrected when real data is read)
+        # However ParseDevice_Explorer can be used as a default parser, when a
+        # new device is encountered, in which case the actual instance value of
+        # se_type would be unknown when the seDataDevices module was imported (or
+        # in other words, ParseDevice_Explorer.se_type will contain a nonsense
+        # value which must be corrected when real data is read)
         self.dev_type = f"{self._devName}_{seType:#06x}"
         self._seId = seId
 
@@ -961,12 +1098,15 @@ class ParseDevice_Explorer(ParseDevice):
 
     def parseAtOffset(self, data, offset, devlen):
         """
-        Parses (up to) 4 bytes of data, beginning at offset, as many ways as it can.
+        Parse (up to) 4 bytes of data at offset, in as many ways as it can.
 
-        :param data: The complete data message.
-        :param offset: The beginning point for the 4 bytes to be parsed.
-        :param devlen: The length of the data message (we cannot parse beyond this!)
-        :return: None, but entries are added into self (the dictionary of itemName -> parsedValue)
+        The parsed values are added into self, as itemName to parsedValue.
+
+        Args:
+            data: The complete data message.
+            offset: The beginning point for the 4 bytes to be parsed.
+            devlen: The length of the data message (we cannot parse beyond
+                this!).
         """
         if offset <= (devlen - 1):
             # Parse items which may be 1 byte long
@@ -1024,6 +1164,12 @@ class ParseDevice_Explorer(ParseDevice):
 
     @classmethod
     def itemNames(cls):
+        """
+        Return the item names collected by the exploratory parser.
+
+        Returns:
+            The list of item names, generated from the offsets of the bytes.
+        """
         # Warning. If ParseDevice_Explorer is used on more than 1 seType data block in a single run, this will *NOT*
         # return sensible values!
         return cls._itemNames
@@ -1035,6 +1181,12 @@ class ParseDevice_Explorer(ParseDevice):
 
     @classmethod
     def itemDefs(cls):
+        """
+        Return a report describing the exploratory parser's items.
+
+        Returns:
+            A formatted string, explaining how the items are generated.
+        """
         msg = [
             "\n\n{} / {} parses data blocks with any unrecognized seType.\n{}".format(
                 cls.__name__, cls.dev_type, "=" * 80
@@ -1051,12 +1203,16 @@ a step towards deciphering a new se_type block, and creating a more sensible par
 
 def merge_update(dict1, dict2):
     """
-    A recursive function which updates a master nested dictionary (dict1) with **only the new** elements of a
-    smaller contributor nested dictionary (dict2).
+    Merge only the new elements of a nested dict2 into the master dict1.
 
-    :param dict1: The master nested dictionary.
-    :param dict2: A new subsidiary nested dictionary, to be merged into dict1.
-    :return: None, but the master dictionary is updated with **only** the new parts of dict2 merged in.
+    This recursive function updates a master nested dictionary (dict1) with
+    **only the new** elements of a smaller contributor nested dictionary
+    (dict2).
+
+    Args:
+        dict1: The master nested dictionary, updated in place with **only** the
+            new parts of dict2.
+        dict2: A new subsidiary nested dictionary, to be merged into dict1.
     """
     for k2, v2 in dict2.items():
         if k2 not in dict1:
@@ -1068,8 +1224,10 @@ def merge_update(dict1, dict2):
             # an updated value.
             pass
         else:
-            # We have reached the bottom of the dictionary of dictionaries structure and still have no NEW identifier keys.
-            # So it looks like the inverter has reported new attributes for an existing instance identifier in the same message
+            # We have reached the bottom of the dictionary of dictionaries
+            # structure and still have no NEW identifier keys. So it looks like
+            # the inverter has reported new attributes for an existing instance
+            # identifier in the same message
             message = (
                 f"WARNING: For {k2} about to overwrite {dict1[k2]} with {v2}"
             )
