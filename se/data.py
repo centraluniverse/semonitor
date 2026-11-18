@@ -655,7 +655,7 @@ def logDevice(devType, seType, seId, devLen, devData):
     Log a header line for a device, then each of its data items.
 
     Args:
-        devType: The device type, such as inverter or batteries.
+        dev_type: The device type, such as inverter or batteries.
         seType: The device type code, such as DEV_INVERTER.
         seId: The ID of the device, as formatted by parseId.
         devLen: The length in bytes of the data of the device.
