@@ -134,7 +134,7 @@ class ParseDevice(dict):
     # common cases.
     _hypotheses: ClassVar[list[tuple[str, Callable[[Any], bool]]]] = []
 
-    def __new__(cls, data, explorer=False):
+    def __new__(cls, data, *, explorer=False):
         # Some fancy footwork so that I can always start to create a ParseDevice, but actually get a subclass which is
         # appropriate for the seType encountered in the data block (provided a subclass specific to the seType has been
         # defined, of course).
