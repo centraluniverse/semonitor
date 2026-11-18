@@ -12,7 +12,7 @@ The top level ParseDevice only performs a rudimentary parse of the data, and ret
 
 Subclasses of ParseDevice (e.g. ParseDevice_0x0030) contain more extensive item
 definitions (stored in the field_defs list) and
-populate the dictionary in a more sensible and useful way. Each subclass is tuned to a specific seType. _dev defines
+populate the dictionary in a more sensible and useful way. Each subclass is tuned to a specific seType. se_type defines
 the seType the subclass is designed to parse, and field_defs lists the
 definitions for blocks of data of that seType.
 
@@ -89,9 +89,11 @@ class ParseDevice(dict):
         course that a specialized subclass for that seType has been defined).
     """
 
-    _dev = 0xFFFF  # dummy value, I hope. Should be overwritten in subclasses.
+    se_type = (
+        0xFFFF  # dummy value, I hope. Should be overwritten in subclasses.
+    )
     _devName = "Unknown_device"
-    dev_type = f"{_devName}_{_dev:#06x}"
+    dev_type = f"{_devName}_{se_type:#06x}"
 
     # DEFINITIONS for items in new devices, filled in for subclasses of ParseDevice.
     #
@@ -143,7 +145,7 @@ class ParseDevice(dict):
 
         # Search for a subclass which can handle this seType
         for subclass in cls.__subclasses__():
-            if subclass._dev == seType:
+            if subclass.se_type == seType:
                 return subclass(data)
 
         # Otherwise either return a ParseDevice_Explorer (explorer=True),
@@ -424,7 +426,7 @@ class ParseDevice(dict):
         """
         msg = [
             "\n\n{} / {} parses data blocks with seType = {:#06x}.\n{}".format(
-                cls.__name__, cls.dev_type, cls._dev, "=" * 80
+                cls.__name__, cls.dev_type, cls.se_type, "=" * 80
             )
         ]
         msg.append("Items are:")
@@ -477,9 +479,9 @@ class ParseDevice_0x0030(ParseDevice):
         # is the __new__ of ParseDevice, which is what we are trying to avoid!
         return dict.__new__(cls)
 
-    _dev = 0x0030
+    se_type = 0x0030
     _devName = "batteries"
-    dev_type = f"{_devName}_{_dev:#06x}"
+    dev_type = f"{_devName}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -600,9 +602,9 @@ class ParseDevice_0x0022(ParseDevice):
         # the recursion limit was reached!
         return dict.__new__(cls)
 
-    _dev = 0x0022
+    se_type = 0x0022
     _devName = "meters"
-    dev_type = f"{_devName}_{_dev:#06x}"
+    dev_type = f"{_devName}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None), out (to CSV or Graphite) True or False, comment]
@@ -898,9 +900,9 @@ class ParseDevice_Explorer(ParseDevice):
         # the recursion limit was reached!
         return dict.__new__(cls)
 
-    _dev = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
+    se_type = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
     _devName = "explore"
-    dev_type = f"{_devName}_{_dev:#06x}"
+    dev_type = f"{_devName}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = []
     _itemNames: ClassVar[list[str]] = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
@@ -927,12 +929,13 @@ class ParseDevice_Explorer(ParseDevice):
             "<HLH", data[dataPtr : dataPtr + devHdrLen]
         )
 
-        self._dev = seType
+        self.se_type = seType
         self._field_defs_len = devLen
         # For standard subclasses, dev_type will already have this value.
         # However ParseDevice_Explorer can be used as a default parser, when a new device is encountered, in which case
         # the actual instance value of seType would be unknown when the seDataDevices module was imported (or in other
-        # words, ParseDevice_Explorer._dev will contain a nonsense value which must be corrected when real data is read)
+        # words, ParseDevice_Explorer.se_type will contain a nonsense value
+        # which must be corrected when real data is read)
         self.dev_type = f"{self._devName}_{seType:#06x}"
         self._seId = seId
 
