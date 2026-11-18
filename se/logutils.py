@@ -29,7 +29,7 @@ def _raw_log(self, msg, *args, **kwargs):
         self._log(LOG_LEVEL_RAW, msg, args, **kwargs)
 
 
-def _message_log(self, direction, seq, msg, endPoint=""):
+def _message_log(self, direction, seq, msg, end_point=""):
     """Log an incoming or outgoing data message, and its raw data."""
     # Call the internal _log() method to report the caller properly.
     if not self.isEnabledFor(logging.DEBUG):
@@ -37,7 +37,7 @@ def _message_log(self, direction, seq, msg, endPoint=""):
     self._log(
         logging.DEBUG,
         "%s %s message: %s length: %s",
-        (endPoint, direction, seq, len(msg)),
+        (end_point, direction, seq, len(msg)),
     )
     if self.isEnabledFor(LOG_LEVEL_RAW):
         for line in format_data(msg):
@@ -58,17 +58,17 @@ logging.Logger.raw = _raw_log
 logging.Logger.message = _message_log
 
 
-def setState(state, item, value):
+def set_state(state, item, value):
     """Store value under item in state, with the current time."""
     state[item] = [time.time(), value]
 
 
-def dumpState(state):
+def dump_state(state):
     """
     Log the state variables, and the stack traces of all threads.
 
     Args:
-        state: A dict of state variables, as set by setState.
+        state: A dict of state variables, as set by set_state.
     """
     logger = logging.getLogger(__name__)
     logger.info("state:")
@@ -80,8 +80,8 @@ def dumpState(state):
             state[item][1],
         )
     # The only way to get the frames of the other threads, it is in the docs
-    for threadId, stack in sys._current_frames().items():  # noqa: SLF001
-        logger.info("ThreadID: %s", threadId)
+    for thread_id, stack in sys._current_frames().items():  # noqa: SLF001
+        logger.info("ThreadID: %s", thread_id)
         for filename, lineno, name, line in traceback.extract_stack(stack):
             logger.info(
                 '      File: "%s", line %d, in %s', filename, lineno, name

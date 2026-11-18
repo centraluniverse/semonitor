@@ -93,19 +93,18 @@ class ParseDevice(dict):
 
         to provide a suite of standard methods shared by all the subclasses (and
         in particular the parse_dev_table method which given a field_defs list,
-        will parse the seData block accordingly); and
-        to have a 'clever' __new__ method, which redirects the creation of a
-        ParseDevice to the creation of a subclass of a ParseDevice which
-        specializes in the particular seType encountered in the current block of
-        seData (provided of course that a specialized subclass for that seType
-        has been defined).
+        will parse the seData block accordingly); and to have a 'clever' __new__
+        method, which redirects the creation of a ParseDevice to the creation of
+        a subclass of a ParseDevice which specializes in the particular se_type
+        encountered in the current block of seData (provided of course that a
+        specialized subclass for that se_type has been defined).
     """
 
     se_type = (
         0xFFFF  # dummy value, I hope. Should be overwritten in subclasses.
     )
-    _devName = "Unknown_device"
-    dev_type = f"{_devName}_{se_type:#06x}"
+    _dev_name = "Unknown_device"
+    dev_type = f"{_dev_name}_{se_type:#06x}"
 
     # DEFINITIONS for items in new devices, filled in for subclasses.
     #
@@ -117,20 +116,20 @@ class ParseDevice(dict):
         # The following standard device header fields are automatically parsed
         # for all device types.
         # These items do *not* need to be defined! They are:
-        # - seType: 2 bytes ('H'), identifies the type of this SolarEdge data
+        # - se_type: 2 bytes ('H'), identifies the type of this SolarEdge data
         #   block, shown as a 4 digit hex number
-        # - seId: 4 bytes ('L'), identifies the SolarEdge device, formatted by
+        # - se_id: 4 bytes ('L'), identifies the SolarEdge device, formatted by
         #   parse_id
-        # - devLen: 2 bytes ('H'), the length in bytes of the data block
+        # - dev_len: 2 bytes ('H'), the length in bytes of the data block
     ]
 
     # DERIVATIONS, optional, can be left empty if not required.
     #
     # List of names of derived items.
     # Useful for documenting the interpretation of the derived values, and is
-    # also used to set the default values (in case the condition which
-    # triggers the derivation does not occur at a particular timeStamp) - see
-    # the set_derivation_defaults method.
+    # also used to set the default values (in case the condition which triggers
+    # the derivation does not occur at a particular timeStamp) - see the
+    # set_derivation_defaults method.
 
     # Each "definition" is itself a list, comprising:
     # [paramName, paramDefault, out (to CSV) True or False, comment]
@@ -138,26 +137,23 @@ class ParseDevice(dict):
     #
     # NB *** It is (much) simpler to describe the actual derivation for a
     # particular item in Python code (within the subclass that needs it) than to
-    # develop a completely new "syntax" for describing derivations!
-    # see the code_derivations method in the subclasses of ParseDevice for
-    # examples.
+    # develop a completely new "syntax" for describing derivations! see the
+    # code_derivations method in the subclasses of ParseDevice for examples.
 
     _derivn: ClassVar[list[list[Any]]] = [
         # [paramName, paramDefault, out (to CSV) True or False, comment]
     ]
 
     # HYPOTHESES, optional, list of (text, predicate) pairs for conditions which
-    # I expect to be always true.
-    # The predicate takes the parsed device, the text is what gets logged when
-    # it is false.
-    # Useful for generating debug alerts in the event of "new" unexpected values
-    # appearing in data items.
-    # See ParseDevice0x0030 for an example, and is_zero and is_small for the
-    # common cases.
+    # I expect to be always true. The predicate takes the parsed device, the
+    # text is what gets logged when it is false. Useful for generating debug
+    # alerts in the event of "new" unexpected values appearing in data items.
+    # See ParseDevice0x0030 for an example, and is_zero and is_small
+    # for the common cases.
     _hypotheses: ClassVar[list[tuple[str, Callable[[Any], bool]]]] = []
 
     def __new__(cls, data, *, explorer=False):
-        """Return a parsed instance of the subclass for the data's seType."""
+        """Return the subclass instance that matches the seType of the data."""
         # Some fancy footwork so that I can always start to create a
         # ParseDevice, but actually get a subclass which is appropriate for the
         # seType encountered in the data block (provided a subclass specific to
@@ -167,10 +163,10 @@ class ParseDevice(dict):
 
         # Search for a subclass which can handle this se_type
         for subclass in cls.__subclasses__():
-            if subclass.se_type == seType:
+            if subclass.se_type == se_type:
                 return subclass(data)
 
-        # Otherwise either return a ParseDevice_Explorer (explorer=True),
+        # Otherwise either return a ParseDeviceExplorer (explorer=True),
         # which is a special subclass which will parse almost anything,
         # albeit with quite a number of nonsense parsings interspersed with
         # occasional correctly parsed fields, or just return a bare minimum
@@ -178,16 +174,16 @@ class ParseDevice(dict):
         if explorer:
             # return a special ParseDevice which tries almost every field
             # parsing it knows about
-            return ParseDevice_Explorer(data)
+            return ParseDeviceExplorer(data)
         # return an instance of a basic dictionary (the base class for
         # ParseDevice itself)
-        newInstance = super().__new__(cls)
+        new_instance = super().__new__(cls)
         # (Re)setting a basically empty (unknown) definition for this instance
         # is crucial because you may have already encountered another unknown
-        # device with a *different* length and field_defs, and the parseDevTable
-        # method updates the *class* definition dynamically if it encounters
-        # more data than it expects.
-        newInstance.field_defs = [
+        # device with a *different* length and field_defs, and the
+        # parse_dev_table method updates the *class* definition dynamically if
+        # it encounters more data than it expects.
+        new_instance.field_defs = [
             [
                 4,
                 "L",
@@ -197,58 +193,57 @@ class ParseDevice(dict):
                 "seconds, time since the epoch",
             ]
         ]
-        return newInstance
+        return new_instance
 
     @staticmethod
-    def parseId(seId):
+    def parse_id(se_id):
         """
-        Format a device id as an upper-case hex string, with bit 23 cleared.
+        Return the device id as an upper-case hex string, bit 23 cleared.
 
         Args:
-            seId: The device id from the header of a data block.
+            se_id: The device id from the header of a data block.
 
         Returns:
             The device id as a string.
         """
-        return ("%x" % (seId & 0xFF7FFFFF)).upper()
+        return ("%x" % (se_id & 0xFF7FFFFF)).upper()
 
     @staticmethod
-    def formatDateStamp(timeStamp):
+    def format_date_stamp(time_stamp):
         """
-        Format a Unix timestamp as a local date, YYYY-MM-DD.
+        Return the local date of a Unix timestamp, or "invalid".
 
         Args:
-            timeStamp: The Unix timestamp.
+            time_stamp: The Unix timestamp.
 
         Returns:
             The date as a string, or "invalid" if the timestamp is not valid.
         """
         try:
-            return time.strftime("%Y-%m-%d", time.localtime(timeStamp))
+            return time.strftime("%Y-%m-%d", time.localtime(time_stamp))
         except (OverflowError, OSError, TypeError, ValueError) as ex:
-            logger.info("Invalid timestamp: %s %s", timeStamp, ex)
+            logger.info("Invalid timestamp: %s %s", time_stamp, ex)
             return "invalid"
 
     @staticmethod
-    def formatTimeStamp(timeStamp):
+    def format_time_stamp(time_stamp):
         """
         Format a Unix timestamp as a local time, HH:MM:SS.
 
         Args:
-            timeStamp: The Unix timestamp.
+            time_stamp: The Unix timestamp.
 
         Returns:
             The time as a string, or "invalid" if the timestamp is not valid.
         """
         try:
-            return time.strftime("%H:%M:%S", time.localtime(timeStamp))
+            return time.strftime("%H:%M:%S", time.localtime(time_stamp))
         except (OverflowError, OSError, TypeError, ValueError) as ex:
-            logger.info("Invalid timestamp: %s %s", timeStamp, ex)
+            logger.info("Invalid timestamp: %s %s", time_stamp, ex)
             return "invalid"
 
-    # format a hex entry as a readable string
     @staticmethod
-    def hexData(data):
+    def hex_data(data):
         """
         Convert a string of bytes into a nicely formatted hex string.
 
@@ -259,34 +254,36 @@ class ParseDevice(dict):
             A longer string, containing a hex representation of the data
             bytes, formatted for easier reading.
         """
-        lineSize = 16
+        line_size = 16
 
-        def hexLine(data):
+        def hex_line(data):
             return " ".join(f"{x:02x}" for x in data)
 
-        hexLines = []
+        hex_lines = []
         if data:
-            printPtr = 0
-            while len(data) - printPtr >= lineSize:
-                hexLines.append(hexLine(data[printPtr : printPtr + lineSize]))
-                printPtr += lineSize
-            if printPtr < len(data):
-                hexLines.append(hexLine(data[printPtr:]))
-        return " | ".join(hexLines)
+            print_ptr = 0
+            while len(data) - print_ptr >= line_size:
+                hex_lines.append(
+                    hex_line(data[print_ptr : print_ptr + line_size])
+                )
+                print_ptr += line_size
+            if print_ptr < len(data):
+                hex_lines.append(hex_line(data[print_ptr:]))
+        return " | ".join(hex_lines)
 
     @staticmethod
-    def unhexData(hexData):
+    def unhex_data(hex_data):
         """
-        Convert a hex representation into bytes, the inverse of hexData.
+        Convert a hex representation into bytes, the inverse of hex_data.
 
         Args:
-            hexData: String, containing a (must be valid) hex representation
+            hex_data: String, containing a (must be valid) hex representation
                 of some bytes.
 
         Returns:
-            The string of bytes corresponding to hexData.
+            The string of bytes corresponding to hex_data.
         """
-        return binascii.unhexlify(hexData.replace("|", "").replace(" ", ""))
+        return binascii.unhexlify(hex_data.replace("|", "").replace(" ", ""))
 
     def __init__(self, data, **_kwargs):
         """
@@ -297,12 +294,12 @@ class ParseDevice(dict):
             **_kwargs: Ignored. ParseDevice(data, explorer=...) passes the
                 keywords of __new__ to __init__ too.
         """
-        self.parseDevTable(data)
-        self.setDerivationDefaults()
-        self.codeDerivations()
-        self.checkHypotheses()
+        self.parse_dev_table(data)
+        self.set_derivation_defaults()
+        self.code_derivations()
+        self.check_hypotheses()
 
-    def parseDevTable(self, data):
+    def parse_dev_table(self, data):
         """
         Parse the header and every field of the data block into self.
 
@@ -313,61 +310,61 @@ class ParseDevice(dict):
             ValueError: If field_defs describe more bytes than the data block
                 contains.
         """
-        dataPtr = 0
-        devHdrLen = 8
+        data_ptr = 0
+        dev_hdr_len = 8
         # device header
-        (seType, seId, devLen) = struct.unpack(
-            "<HLH", data[dataPtr : dataPtr + devHdrLen]
+        (se_type, se_id, dev_len) = struct.unpack(
+            "<HLH", data[data_ptr : data_ptr + dev_hdr_len]
         )
-        dataPtr += devHdrLen
+        data_ptr += dev_hdr_len
 
         # For (almost) all subclasses, dev_type will already have this value.
         # This is necessary only when a default catchall parse is happening,
         # because a specific parser for se_type has not been defined.
-        self.dev_type = f"{self._devName}_{seType:#06x}"
+        self.dev_type = f"{self._dev_name}_{se_type:#06x}"
         # Store _seId as an attribute for later use as part of the standard
         # "dictionary of dictionaries" wrapper when a parsed instance is
         # converted to json.
-        self._seId = self.parseId(seId)
+        self._seId = self.parse_id(se_id)
 
         self.update(
             {
-                "seType": f"{seType:#06x}",
+                "seType": f"{se_type:#06x}",
                 "seId": self._seId,
-                "devLen": devLen,
+                "devLen": dev_len,
                 "devType": self.dev_type,
             }
         )
 
-        if self.field_defs_len > devLen:
-            msg = f"You have defined more bytes, {self.field_defs_len}, than the message contains, {devLen}"
+        if self.field_defs_len > dev_len:
+            msg = f"You have defined more bytes, {self.field_defs_len}, than the message contains, {dev_len}"
             raise ValueError(msg)
-        if self.field_defs_len < devLen:
+        if self.field_defs_len < dev_len:
             # By default, convert any remaining undefined bytes to their
             # representation as a hexadecimal string.
             self.field_defs.append(
                 [
-                    devLen - self.field_defs_len,
+                    dev_len - self.field_defs_len,
                     "hex",
                     "Undeciphered_data",
-                    self.hexData,
+                    self.hex_data,
                     True,
                     "unknown as yet",
                 ]
             )
 
         for (
-            paramLen,
-            paramInFmt,
-            paramName,
-            outFormatFn,
+            param_len,
+            param_in_fmt,
+            param_name,
+            out_format_fn,
             _out,
             _comment,
         ) in self.field_defs:
-            raw = data[dataPtr : dataPtr + paramLen]
-            self._unpack_field(paramName, paramInFmt, raw)
-            self._format_field(paramName, outFormatFn)
-            dataPtr += paramLen
+            raw = data[data_ptr : data_ptr + param_len]
+            self._unpack_field(param_name, param_in_fmt, raw)
+            self._format_field(param_name, out_format_fn)
+            data_ptr += param_len
 
     def _unpack_field(self, param_name, param_fmt, raw):
         """Unpack the raw bytes of a field into self."""
@@ -404,7 +401,7 @@ class ParseDevice(dict):
         # Optionally format the field
         if out_format_fn == "dateTime":
             try:
-                self["Date"] = self.formatDateStamp(self[param_name])
+                self["Date"] = self.format_date_stamp(self[param_name])
             except ValueError:
                 logger.debug(
                     "'%s' is not a valid date, changed to '1970-01-01'",
@@ -412,7 +409,7 @@ class ParseDevice(dict):
                 )
                 self["Date"] = "1970-01-01"
             try:
-                self["Time"] = self.formatTimeStamp(self[param_name])
+                self["Time"] = self.format_time_stamp(self[param_name])
             except ValueError:
                 logger.debug(
                     "'%s' is not a valid time, changed to '00:00:01'",
@@ -422,15 +419,15 @@ class ParseDevice(dict):
         elif out_format_fn is not None:
             self[param_name] = out_format_fn(self[param_name])
 
-    def setDerivationDefaults(self):
+    def set_derivation_defaults(self):
         """Set every derived item to its default value."""
-        for paramName, paramDefault, _out, _comment in self._derivn:
-            self[paramName] = paramDefault
+        for param_name, param_default, _out, _comment in self._derivn:
+            self[param_name] = param_default
 
-    def codeDerivations(self):
+    def code_derivations(self):
         """Calculate derived items. Nothing here; subclasses override it."""
 
-    def checkHypotheses(self):
+    def check_hypotheses(self):
         """Log a warning for each hypothesis that does not hold."""
         for hypothesis, holds in self._hypotheses:
             if not holds(self):
@@ -469,7 +466,7 @@ class ParseDevice(dict):
         return {self.dev_type: {self._seId: self}}
 
     @classmethod
-    def itemNames(cls):
+    def item_names(cls):
         """
         Return the names of the items written to CSV and Graphite.
 
@@ -479,16 +476,16 @@ class ParseDevice(dict):
         Returns:
             The list of item names, with Date and Time in place of dateTime.
         """
-        # devItemNames = ["seType", "seId", "devLen", "dev_type"] These are
+        # devItemNames = ["seType", "seId", "devLen", "devType"] These are
         # "uninteresting" and will not be output to CSV
         # Extract a list of the names of "interesting" items, that will
         # routinely be sent to CSV and Graphite.
-        devItemNames = [
+        dev_item_names = [
             name
             for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
             if out
         ]
-        devItemNames.extend(
+        dev_item_names.extend(
             [
                 paramName
                 for paramName, paramDefault, out, comment in cls._derivn
@@ -498,15 +495,15 @@ class ParseDevice(dict):
         # Find the dateTime output format entry (if it exists) and insert
         # additional separate Date and Time items
         try:
-            iDateTime = [
+            i_date_time = [
                 outFmt
                 for itemLen, fmt, name, outFmt, out, comment in cls.field_defs
             ].index("dateTime")  # + 3
-            devItemNames.insert(iDateTime, "Time")
-            devItemNames.insert(iDateTime, "Date")
+            dev_item_names.insert(i_date_time, "Time")
+            dev_item_names.insert(i_date_time, "Date")
         except ValueError:
             pass  # The dateTime field has not been identified/defined yet
-        return devItemNames
+        return dev_item_names
 
     @property
     def field_defs_len(self):
@@ -517,7 +514,7 @@ class ParseDevice(dict):
         )
 
     @classmethod
-    def itemDefs(cls):
+    def item_defs(cls):
         """
         Produce a pretty report on the item definitions parsed by this class.
 
@@ -533,46 +530,46 @@ class ParseDevice(dict):
             )
         ]
         msg.append("Items are:")
-        itemLine = "{:<4} ({:^6})   {:<6} | {:<25} \n\t\t\t\t\t\t: {:<0}\n"
+        item_line = "{:<4} ({:^6})   {:<6} | {:<25} \n\t\t\t\t\t\t: {:<0}\n"
         msg.append(
-            itemLine.format("Byte", "Length", "Word", "Item Name", "Meaning")
+            item_line.format("Byte", "Length", "Word", "Item Name", "Meaning")
         )
         msg.append(
-            itemLine.format("_" * 4, "_" * 6, "_" * 6, "_" * 25, "_" * 40)
+            item_line.format("_" * 4, "_" * 6, "_" * 6, "_" * 25, "_" * 40)
         )
         byte = 0
         word = byte / 4.0
         if len(cls.field_defs) > 0:
             for (
-                paramLen,
+                param_len,
                 _param_in_fmt,
-                paramName,
+                param_name,
                 _out_format_fn,
                 _out,
                 comment,
             ) in cls.field_defs:
                 msg.append(
-                    itemLine.format(byte, paramLen, word, paramName, comment)
+                    item_line.format(byte, param_len, word, param_name, comment)
                 )
-                byte += paramLen
+                byte += param_len
                 word = byte / 4.0
         if len(cls._derivn) > 0:
             msg.append("Derived items\n")
-            for paramName, paramDefault, _out, comment in cls._derivn:
+            for param_name, param_default, _out, comment in cls._derivn:
                 msg.append(
-                    itemLine.format(
+                    item_line.format(
                         "----",
                         "------",
                         "----",
-                        paramName,
-                        f"(default={paramDefault}) {comment}",
+                        param_name,
+                        f"(default={param_default}) {comment}",
                     )
                 )
-        msg.extend(subclass.itemDefs() for subclass in cls.__subclasses__())
+        msg.extend(subclass.item_defs() for subclass in cls.__subclasses__())
         return "\n".join(msg)
 
 
-class ParseDevice_0x0030(ParseDevice):
+class ParseDevice0x0030(ParseDevice):
     """Parser for battery (se_type 0x0030) data blocks."""
 
     def __new__(cls, _data):
@@ -588,8 +585,8 @@ class ParseDevice_0x0030(ParseDevice):
         return dict.__new__(cls)
 
     se_type = 0x0030
-    _devName = "batteries"
-    dev_type = f"{_devName}_{se_type:#06x}"
+    _dev_name = "batteries"
+    dev_type = f"{_dev_name}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None),
@@ -644,7 +641,7 @@ class ParseDevice_0x0030(ParseDevice):
             4,
             "hex",
             "HexConst_52",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             False,
             "unknown, constant value",
         ],
@@ -652,7 +649,7 @@ class ParseDevice_0x0030(ParseDevice):
             4,
             "hex",
             "HexConst_56",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             False,
             "unknown, constant value",
         ],
@@ -710,7 +707,7 @@ class ParseDevice_0x0030(ParseDevice):
         return {self.dev_type: {self._seId: {self["batteryId"]: self}}}
 
 
-class ParseDevice_0x0022(ParseDevice):
+class ParseDevice0x0022(ParseDevice):
     """Parser for meter (se_type 0x0022) data blocks, one record per recType."""
 
     def __new__(cls, _data):
@@ -723,8 +720,8 @@ class ParseDevice_0x0022(ParseDevice):
         return dict.__new__(cls)
 
     se_type = 0x0022
-    _devName = "meters"
-    dev_type = f"{_devName}_{se_type:#06x}"
+    _dev_name = "meters"
+    dev_type = f"{_dev_name}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = [
         # device specific fields
         #  [paramLen, paramInFmt, paramName, outFormatFn (can be None),
@@ -780,7 +777,7 @@ class ParseDevice_0x0022(ParseDevice):
             2,
             "hex",
             "Flag_off12_hex",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             True,
             "flag"
             + sp
@@ -805,7 +802,7 @@ class ParseDevice_0x0022(ParseDevice):
             2,
             "hex",
             "Flag_off20_hex",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             True,
             "flag"
             + sp
@@ -832,7 +829,7 @@ class ParseDevice_0x0022(ParseDevice):
             2,
             "hex",
             "Flag_off28_hex",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             True,
             "flag"
             + sp
@@ -861,7 +858,7 @@ class ParseDevice_0x0022(ParseDevice):
             2,
             "hex",
             "Flag_off36_hex",
-            ParseDevice.hexData,
+            ParseDevice.hex_data,
             True,
             "flag"
             + sp
@@ -960,7 +957,7 @@ class ParseDevice_0x0022(ParseDevice):
         """Parse the data block; extra keyword arguments are ignored."""
         super().__init__(data)
 
-    def codeDerivations(self):
+    def code_derivations(self):
         """Replace the bogus large negative P2X values with NaN."""
         # Filter out some sporadic 'NaN'-like values which appear in P2X.  The
         # hex value is the BIG endian version of a Python NaN. Read as LITTLE
@@ -999,20 +996,20 @@ class ParseDevice_0x0022(ParseDevice):
             The (parsed) device attributes, "wrapped" in dictionary of
             dictionaries based on device type and device identifiers.
         """
-        recTypeLabels = {
+        rec_type_labels = {
             3: "3_Consumption",
             5: "5_GridImportExport",
             7: "7_Battery",
             8: "8_MostlyZeroes",
             9: "9_PVProduction",
         }
-        recTypeLabel = recTypeLabels.get(
+        rec_type_label = rec_type_labels.get(
             self["recType"], "{}_UnrecognizedRecType".format(self["recType"])
         )
-        return {self.dev_type: {self._seId: {recTypeLabel: self}}}
+        return {self.dev_type: {self._seId: {rec_type_label: self}}}
 
 
-class ParseDevice_Explorer(ParseDevice):
+class ParseDeviceExplorer(ParseDevice):
     """
     A special parser which tries several ways of interpreting each data item.
 
@@ -1035,14 +1032,14 @@ class ParseDevice_Explorer(ParseDevice):
         # the recursion limit was reached!
         return dict.__new__(cls)
 
-    se_type = 0xFFFF  # dummy value since ParseDevice_Explorer will "parse" any seType (albeit overly enthusiastically!)
-    _devName = "explore"
-    dev_type = f"{_devName}_{se_type:#06x}"
+    se_type = 0xFFFF  # dummy value since ParseDeviceExplorer will "parse" any se_type (albeit overly enthusiastically!)
+    _dev_name = "explore"
+    dev_type = f"{_dev_name}_{se_type:#06x}"
     field_defs: ClassVar[list[list[Any]]] = []
-    _itemNames: ClassVar[list[str]] = ["seType", "seId", "devLen", "devType"]
+    _item_names: ClassVar[list[str]] = ["seType", "seId", "devLen", "devType"]
     _field_defs_len = 0
 
-    def parseDevTable(self, data):
+    def parse_dev_table(self, data):
         """
         Parse the data block in as many ways as possible.
 
@@ -1058,46 +1055,46 @@ class ParseDevice_Explorer(ParseDevice):
         Args:
             data: The data to be parsed, in as many ways as possible.
         """
-        dataPtr = 0
-        devHdrLen = 8
+        data_ptr = 0
+        dev_hdr_len = 8
         # device header
-        (seType, seId, devLen) = struct.unpack(
-            "<HLH", data[dataPtr : dataPtr + devHdrLen]
+        (se_type, se_id, dev_len) = struct.unpack(
+            "<HLH", data[data_ptr : data_ptr + dev_hdr_len]
         )
 
-        self.se_type = seType
-        self._field_defs_len = devLen
+        self.se_type = se_type
+        self._field_defs_len = dev_len
         # For standard subclasses, dev_type will already have this value.
-        # However ParseDevice_Explorer can be used as a default parser, when a
+        # However ParseDeviceExplorer can be used as a default parser, when a
         # new device is encountered, in which case the actual instance value of
-        # se_type would be unknown when the seDataDevices module was imported (or
-        # in other words, ParseDevice_Explorer.se_type will contain a nonsense
-        # value which must be corrected when real data is read)
-        self.dev_type = f"{self._devName}_{seType:#06x}"
-        self._seId = seId
+        # se_type would be unknown when the seDataDevices module was imported
+        # (or in other words, ParseDeviceExplorer.se_type will contain a
+        # nonsense value which must be corrected when real data is read)
+        self.dev_type = f"{self._dev_name}_{se_type:#06x}"
+        self._seId = se_id
 
-        dataPtr += devHdrLen
+        data_ptr += dev_hdr_len
         self.update(
             {
-                "seType": f"{seType:#06x}",
-                "seId": self.parseId(seId),
-                "devLen": devLen,
+                "seType": f"{se_type:#06x}",
+                "seId": self.parse_id(se_id),
+                "devLen": dev_len,
                 "devType": self.dev_type,
             }
         )
 
         # First, dump a hex version of the whole block into one field
-        self["AllAsHex"] = self.hexData(data[dataPtr:])
+        self["AllAsHex"] = self.hex_data(data[data_ptr:])
         # Next work through the block, 2 bytes at a time, trying as many
         # potential parsings as will fit.
         # I am assuming items will be at least 2 bytes long. Easy enough to
         # change if you need to try different offsets.
-        for offset in range(0, devLen, 2):
+        for offset in range(0, dev_len, 2):
             # Parse a range of possible interpretations of the (4) bytes
             # beginning at offset.
-            self.parseAtOffset(data[dataPtr:], offset, devLen)
+            self.parse_at_offset(data[data_ptr:], offset, dev_len)
 
-    def parseAtOffset(self, data, offset, devlen):
+    def parse_at_offset(self, data, offset, devlen):
         """
         Parse (up to) 4 bytes of data at offset, in as many ways as it can.
 
@@ -1111,69 +1108,69 @@ class ParseDevice_Explorer(ParseDevice):
         """
         if offset <= (devlen - 1):
             # Parse items which may be 1 byte long
-            itemName = f"offset{offset:03}_1_hex1"
-            self[itemName] = self.hexData(data[offset : offset + 1])
-            self._itemNames.append(itemName)
+            item_name = f"offset{offset:03}_1_hex1"
+            self[item_name] = self.hex_data(data[offset : offset + 1])
+            self._item_names.append(item_name)
 
         if offset <= (devlen - 2):
             # Parse items which may be 2 bytes long
-            itemName = f"offset{offset:03}_1_hex2"
-            self[itemName] = self.hexData(data[offset : offset + 2])
-            self._itemNames.append(itemName)
-            itemName = f"offset{offset:03}_4_int2"
-            self[itemName] = struct.unpack("<H", data[offset : offset + 2])[0]
-            self._itemNames.append(itemName)
+            item_name = f"offset{offset:03}_1_hex2"
+            self[item_name] = self.hex_data(data[offset : offset + 2])
+            self._item_names.append(item_name)
+            item_name = f"offset{offset:03}_4_int2"
+            self[item_name] = struct.unpack("<H", data[offset : offset + 2])[0]
+            self._item_names.append(item_name)
 
         if offset <= (devlen - 4):
             # Parse items which may be 4 bytes long
-            itemName = f"offset{offset:03}_1_hex4"
-            self[itemName] = self.hexData(data[offset : offset + 4])
-            self._itemNames.append(itemName)
-            itemName = f"offset{offset:03}_3_float_LE"
-            self[itemName] = struct.unpack("<f", data[offset : offset + 4])[0]
-            self._itemNames.append(itemName)
-            itemName = f"offset{offset:03}_3_float_BE"
-            self[itemName] = struct.unpack(">f", data[offset : offset + 4])[0]
-            self._itemNames.append(itemName)
-            itemName = f"offset{offset:03}_4_int4"
-            self[itemName] = struct.unpack("<L", data[offset : offset + 4])[0]
-            self._itemNames.append(itemName)
+            item_name = f"offset{offset:03}_1_hex4"
+            self[item_name] = self.hex_data(data[offset : offset + 4])
+            self._item_names.append(item_name)
+            item_name = f"offset{offset:03}_3_float_LE"
+            self[item_name] = struct.unpack("<f", data[offset : offset + 4])[0]
+            self._item_names.append(item_name)
+            item_name = f"offset{offset:03}_3_float_BE"
+            self[item_name] = struct.unpack(">f", data[offset : offset + 4])[0]
+            self._item_names.append(item_name)
+            item_name = f"offset{offset:03}_4_int4"
+            self[item_name] = struct.unpack("<L", data[offset : offset + 4])[0]
+            self._item_names.append(item_name)
             # Maybe it is a date?
             try:
-                self[f"Date_offset{offset:03}"] = self.formatDateStamp(
-                    self[itemName]
+                self[f"Date_offset{offset:03}"] = self.format_date_stamp(
+                    self[item_name]
                 )
-                self[f"Time_offset{offset:03}"] = self.formatTimeStamp(
-                    self[itemName]
+                self[f"Time_offset{offset:03}"] = self.format_time_stamp(
+                    self[item_name]
                 )
                 # Other modules (e.g. se2graphite) become upset if Date and Time
                 # are not supplied, so take the 1st valid Date we find.
                 # Implicitly I'm guessing offset zero is the "real" date.
                 if "Date" not in self.keys():
-                    self["Date"] = self.formatDateStamp(self[itemName])
-                    self["Time"] = self.formatTimeStamp(self[itemName])
+                    self["Date"] = self.format_date_stamp(self[item_name])
+                    self["Time"] = self.format_time_stamp(self[item_name])
             except ValueError:
                 # Apparently it is not a date!
                 self[f"Date_offset{offset:03}"] = (
-                    f"{self[itemName]} is not a Date"
+                    f"{self[item_name]} is not a Date"
                 )
                 self[f"Time_offset{offset:03}"] = (
-                    f"{self[itemName]} is not a Time"
+                    f"{self[item_name]} is not a Time"
                 )
-            self._itemNames.append(f"Date_offset{offset:03}")
-            self._itemNames.append(f"Time_offset{offset:03}")
+            self._item_names.append(f"Date_offset{offset:03}")
+            self._item_names.append(f"Time_offset{offset:03}")
 
     @classmethod
-    def itemNames(cls):
+    def item_names(cls):
         """
         Return the item names collected by the exploratory parser.
 
         Returns:
             The list of item names, generated from the offsets of the bytes.
         """
-        # Warning. If ParseDevice_Explorer is used on more than 1 seType data block in a single run, this will *NOT*
-        # return sensible values!
-        return cls._itemNames
+        # Warning. If ParseDevice_Explorer is used on more than 1 se_type data
+        # block in a single run, this will *NOT* return sensible values!
+        return cls._item_names
 
     @property
     def field_defs_len(self):
@@ -1181,7 +1178,7 @@ class ParseDevice_Explorer(ParseDevice):
         return self._field_defs_len
 
     @classmethod
-    def itemDefs(cls):
+    def item_defs(cls):
         """
         Return a report describing the exploratory parser's items.
 

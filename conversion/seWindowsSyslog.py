@@ -41,11 +41,11 @@ class TimedRotatingFileHandlerUmasked(
         Returns:
             The opened stream of the log file.
         """
-        prevUmask = os.umask(0o002)
+        prev_umask = os.umask(0o002)
         try:
             return super()._open()
         finally:
-            os.umask(prevUmask)
+            os.umask(prev_umask)
 
 
 my_logger = logging.getLogger("syslog")
