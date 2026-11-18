@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
-# SolarEdge inverter performance monitoring using the SolarEdge protocol
+"""
+SolarEdge inverter performance monitoring using the SolarEdge protocol.
+
+Reads SolarEdge messages from a file or serial device, extracts the
+performance data, and can send commands and act as an RS485 master.
+"""
 
 import dataclasses
 import logging
@@ -44,8 +49,8 @@ class Files:
     out: object  # the file to write the JSON to
 
 
-# program termination
 def terminate(code=0, msg=b""):
+    """Log msg, at info level for code 0 or error level otherwise, and exit."""
     if code == 0:
         logger.info(msg)
     else:
@@ -53,8 +58,13 @@ def terminate(code=0, msg=b""):
     sys.exit(code)
 
 
-# process the input data
 def readData(args, mode, state, files):
+    """
+    Read and process messages until the end of the input.
+
+    Messages that are all zeros are ignored. A message that fails to
+    process is logged and re-raised only if the xerror option is set.
+    """
     eof = False
     if mode.passiveMode:
         # skip data until the start of the first complete message
@@ -79,8 +89,13 @@ def readData(args, mode, state, files):
                 se.logutils.setState(state, "threadLock", value=False)
 
 
-# process a received message
 def processMsg(msg, mode, state, files):
+    """
+    Parse a received message and act on it.
+
+    Performance data is written to the output file, and in master mode a reply
+    is sent when one is due.
+    """
     # parse the message
     (msgSeq, fromAddr, toAddr, function, data) = se.msg.parseMsg(msg)
     if function == 0:
@@ -104,7 +119,6 @@ def processMsg(msg, mode, state, files):
                 se.msg.sendMsg(files.data, msg, files.rec)
 
 
-# the reply of the RS485 master to a message, as a function and its data
 def master_reply(function, state):
     """
     Return the RS485 master's reply to a message.
@@ -135,8 +149,12 @@ def master_reply(function, state):
     return (b"", b"")
 
 
-# RS485 master commands thread
 def masterCommands(state, dataFile, recFile, slaveAddrs):
+    """
+    Run the RS485 master loop, granting the bus to each slave in turn.
+
+    Runs forever, pausing MASTER_MSG_INTERVAL seconds after each round.
+    """
     se.logutils.setState(state, "masterThread", value=True)
     while True:
         for slaveAddr in slaveAddrs:
@@ -144,8 +162,13 @@ def masterCommands(state, dataFile, recFile, slaveAddrs):
         time.sleep(MASTER_MSG_INTERVAL)
 
 
-# send RS485 master grant command and wait for an ACK
 def masterGrant(state, dataFile, recFile, slaveAddr):
+    """
+    Grant the RS485 bus to a slave and wait for it to release the bus.
+
+    The wait ends when the slave acknowledges the grant or when
+    MASTER_MSG_TIMEOUT seconds have passed.
+    """
     with threadLock:
         se.logutils.setState(state, "threadLock", value=True)
         # grant control of the bus to the slave
@@ -181,8 +204,12 @@ def masterGrant(state, dataFile, recFile, slaveAddr):
     se.logutils.setState(state, "masterTimer", value=False)
 
 
-# perform the specified commands
 def doCommands(args, mode, state, files):
+    """
+    Send each command to the slave, wait for its response and record it.
+
+    Responses are written to the output file, with a pause between commands.
+    """
     for command in args.commands:
         # format the command parameters
         function = int(command[0], 16)
@@ -222,8 +249,8 @@ def doCommands(args, mode, state, files):
         time.sleep(COMMAND_DELAY)
 
 
-# start RS485 master thread
 def startMaster(args):
+    """Start the daemon thread that sends the RS485 master commands."""
     # start a thread to send RS485 master commands
     masterThread = threading.Thread(
         name=MASTER_THREAD_NAME, target=masterCommands, args=args
@@ -233,8 +260,8 @@ def startMaster(args):
     logger.info("starting %s", MASTER_THREAD_NAME)
 
 
-# wait until keyboard interrupt
 def block(state):
+    """Sleep until a keyboard interrupt, then dump the state."""
     try:
         while True:
             time.sleep(1)
@@ -242,8 +269,16 @@ def block(state):
         se.logutils.dumpState(state)
 
 
-# get next sequence number
 def nextSeq():
+    """
+    Return the next message sequence number and store it in the sequence file.
+
+    The number wraps to 1 after MAX_SEQ. It starts at 1 if the file is
+    missing or unreadable.
+
+    Returns:
+        The next sequence number.
+    """
     try:
         with Path(SEQ_FILE_NAME).open() as seqFile:
             seq = int(seqFile.read().rstrip("\n"))
