@@ -1,4 +1,9 @@
-# SolarEdge message protocol
+"""
+SolarEdge message protocol.
+
+Reads, parses, formats, validates and sends the framed messages exchanged
+with SolarEdge inverters, including their CRC-16 checksums.
+"""
 
 import logging
 import struct
@@ -37,8 +42,18 @@ class Seq:
     data_out = 0
 
 
-# return the next message
 def readMsg(inFile, recFile, mode, state):
+    """
+    Read the next message from the input file.
+
+    In active mode (not RS485) the magic number, header, data and checksum
+    are read in turn. In passive mode or RS485 bytes are read one at a time
+    until the next magic number is found.
+
+    Returns:
+        A tuple (msg, eof), where msg is the message without its magic number
+        and eof is True when the end of the input was reached.
+    """
     se.logutils.setState(state, "passiveMode", mode.passiveMode)
     se.logutils.setState(state, "serialType", mode.serialType)
     Seq.data_in += 1
@@ -72,9 +87,17 @@ def readMsg(inFile, recFile, mode, state):
     return (msg, eof)
 
 
-# return the specified number of bytes
 def readBytes(inFile, recFile, length, mode, state):
-    # read and write errors are raised, as they are not the end of the data
+    """
+    Read the specified number of bytes from the input file.
+
+    When following a growing file, waits for more data at the end of the
+    file. The bytes read are also written to the record file. Read and write
+    errors are raised, as they are not the end of the data.
+
+    Returns:
+        The bytes read, or b"" at end of file.
+    """
     se.logutils.setState(state, "readLength", length)
     inBuf = bytes(inFile.read(length))
     # at the end of file, wait for more data when following
@@ -90,8 +113,16 @@ def readBytes(inFile, recFile, length, mode, state):
     return inBuf
 
 
-# parse a message
 def parseMsg(msg):
+    """
+    Parse a message into its sequence, addresses, function and data.
+
+    Messages shorter than a header plus checksum are thrown out.
+
+    Returns:
+        A tuple (msgSeq, fromAddr, toAddr, function, data). All fields are
+        zero and data is empty if the message is rejected.
+    """
     if (
         len(msg) < msgHdrLen + checksumLen
     ):  # throw out messages that are too short
@@ -101,7 +132,6 @@ def parseMsg(msg):
     return (msgSeq, fromAddr, toAddr, function, data)
 
 
-# log why a message is rejected, and dump it
 def reject_msg(msg, reason, *args):
     """
     Log why a message is rejected and dump the message data.
@@ -115,8 +145,16 @@ def reject_msg(msg, reason, *args):
     return (0, 0, 0, 0, b"")
 
 
-# parse the header and validate the message
 def validateMsg(msg):
+    """
+    Parse the header of a message and check its lengths and checksum.
+
+    Extra bytes after the message are logged and discarded.
+
+    Returns:
+        A tuple (msgSeq, fromAddr, toAddr, function, data), or the rejected
+        message tuple from reject_msg if the message is invalid.
+    """
     # message must be at least a header and checksum
     if len(msg) < msgHdrLen + checksumLen:
         return reject_msg(msg, "Message too short")
@@ -155,8 +193,13 @@ def validateMsg(msg):
     return (msgSeq, fromAddr, toAddr, function, data)
 
 
-# format a message
 def formatMsg(msgSeq, fromAddr, toAddr, function, data=b""):
+    """
+    Build a complete message, with its length fields and checksum.
+
+    Returns:
+        The message as a bytearray, without the magic number.
+    """
     checksum = calcCrc(
         bytearray(struct.pack(">HLLH", msgSeq, fromAddr, toAddr, function))
         + data
@@ -182,8 +225,8 @@ def formatMsg(msgSeq, fromAddr, toAddr, function, data=b""):
     return msg
 
 
-# send a message
 def sendMsg(dataFile, msg, recFile):
+    """Write a message, prefixed with the magic number, to the data file."""
     Seq.data_out += 1
     logger.message("<--", Seq.data_out, magic + msg, dataFile.name)
     dataFile.write(magic + msg)
@@ -191,8 +234,8 @@ def sendMsg(dataFile, msg, recFile):
     recordMsg(magic + msg, recFile)
 
 
-# write a message to the record file
 def recordMsg(msg, recFile):
+    """Write a message to the record file, if one is open."""
     if recFile:
         recFile.write(msg)
         recFile.flush()
@@ -243,14 +286,15 @@ crcTable = [
 
 
 def calcCrc(data):
+    """Return the CRC-16 checksum of data, using the table above."""
     crc = 0x5A5A  # initial value
     for d in data:
         crc = crcTable[(crc ^ d) & 0xFF] ^ (crc >> 8)
     return crc
 
 
-# print a formatted message header
 def logMsgHdr(hdr):
+    """Log each field of a message header at the data log level."""
     logger.data("dataLen:    %04x", hdr.data_len)
     logger.data("dataLenInv: %04x", hdr.data_len_inv)
     logger.data("sequence:   %04x", hdr.msg_seq)
