@@ -1095,7 +1095,8 @@ class ParseDevice_Explorer(ParseDevice):
         # I am assuming items will be at least 2 bytes long. Easy enough to
         # change if you need to try different offsets.
         for offset in range(0, devLen, 2):
-            # Parse a range of possible interpretations of the (4) bytes beginning at offset.
+            # Parse a range of possible interpretations of the (4) bytes
+            # beginning at offset.
             self.parseAtOffset(data[dataPtr:], offset, devLen)
 
     def parseAtOffset(self, data, offset, devlen):
