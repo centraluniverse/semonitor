@@ -227,7 +227,8 @@ class ParseDevice(dict):
         """
         return binascii.unhexlify(hexData.replace("|", "").replace(" ", ""))
 
-    def __init__(self, data, explorer=False):
+    # ParseDevice(data, explorer=...) hands its arguments to __init__ as well
+    def __init__(self, data, **_kwargs):
         self.parseDevTable(data)
         self.setDerivationDefaults()
         self.codeDerivations()
@@ -465,7 +466,7 @@ class ParseDevice(dict):
 
 
 class ParseDevice_0x0030(ParseDevice):
-    def __new__(cls, data):
+    def __new__(cls, _data):
         # Create a bare minimum instance of a dictionary. ALL subclasses of ParseDevice MUST do this.
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
@@ -590,7 +591,7 @@ class ParseDevice_0x0030(ParseDevice):
 
 
 class ParseDevice_0x0022(ParseDevice):
-    def __new__(cls, data):
+    def __new__(cls, _data):
         # Create a bare minimum instance of a dictionary.
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
@@ -830,7 +831,8 @@ class ParseDevice_0x0022(ParseDevice):
         is_zero("AlwaysZero_off34_int2"),
     ]
 
-    def __init__(self, data, explorer=False):
+    # ParseDevice(data, explorer=...) hands its arguments to __init__ as well
+    def __init__(self, data, **_kwargs):
         super().__init__(data)
 
     def codeDerivations(self):
@@ -887,7 +889,7 @@ class ParseDevice_Explorer(ParseDevice):
     ParseDevice tailored to those items should be constructed.
     """
 
-    def __new__(cls, data):
+    def __new__(cls, _data):
         # Create a bare minimum instance of a dictionary.
         # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
         # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
