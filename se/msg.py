@@ -93,14 +93,25 @@ def parseMsg(msg):
     return (msgSeq, fromAddr, toAddr, function, data)
 
 
+# log why a message is rejected, and dump it
+def reject_msg(msg, reason, *args):
+    """
+    Log why a message is rejected and dump the message data.
+
+    Returns:
+        The empty message tuple (0, 0, 0, 0, b"").
+    """
+    logger.error(reason, *args)
+    for line in se.logutils.format_data(msg):
+        logger.data(line)
+    return (0, 0, 0, 0, b"")
+
+
 # parse the header and validate the message
 def validateMsg(msg):
     # message must be at least a header and checksum
     if len(msg) < msgHdrLen + checksumLen:
-        logger.error("Message too short")
-        for line in se.logutils.format_data(msg):
-            logger.data(line)
-        return (0, 0, 0, 0, b"")
+        return reject_msg(msg, "Message too short")
     # parse the message header
     (dataLen, dataLenInv, msgSeq, fromAddr, toAddr, function) = struct.unpack(
         "<HHHLLH", msg[0:msgHdrLen]
@@ -108,16 +119,10 @@ def validateMsg(msg):
     logMsgHdr(dataLen, dataLenInv, msgSeq, fromAddr, toAddr, function)
     # header + data + checksum can't be longer than the message
     if msgHdrLen + dataLen + checksumLen > len(msg):
-        logger.error("Data length is too big for the message")
-        for line in se.logutils.format_data(msg):
-            logger.data(line)
-        return (0, 0, 0, 0, b"")
+        return reject_msg(msg, "Data length is too big for the message")
     # data length must match inverse length
     if dataLen != ~dataLenInv & 0xFFFF:
-        logger.error("Data length doesn't match inverse length")
-        for line in se.logutils.format_data(msg):
-            logger.data(line)
-        return (0, 0, 0, 0, b"")
+        return reject_msg(msg, "Data length doesn't match inverse length")
     data = msg[msgHdrLen : msgHdrLen + dataLen]
     # discard extra bytes after the message
     extraLen = len(msg) - (msgHdrLen + dataLen + checksumLen)
@@ -133,12 +138,12 @@ def validateMsg(msg):
         struct.pack(">HLLH", msgSeq, fromAddr, toAddr, function) + data
     )
     if calcsum != checksum:
-        logger.error(
-            "Checksum error. Expected 0x%04x, got 0x%04x", checksum, calcsum
+        return reject_msg(
+            msg,
+            "Checksum error. Expected 0x%04x, got 0x%04x",
+            checksum,
+            calcsum,
         )
-        for line in se.logutils.format_data(msg):
-            logger.data(line)
-        return (0, 0, 0, 0, b"")
     return (msgSeq, fromAddr, toAddr, function, data)
 
 
