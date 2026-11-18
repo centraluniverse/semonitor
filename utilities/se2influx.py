@@ -5,7 +5,6 @@ import contextlib
 import gzip
 import json
 import logging
-import os
 import queue
 import select
 import shutil
@@ -255,7 +254,7 @@ class Se2Influx:
                         logger.exception("Error writing to %s", self.log_path)
                         return
 
-                    size = os.stat(self.log_path).st_size
+                    size = Path(self.log_path).stat().st_size
                     if self.max_log_size and size > self.max_log_size:
                         log_fh.close()
                         try:
@@ -277,12 +276,12 @@ class Se2Influx:
         gz_log = f"{log_root}-{ts}{sep}{log_ext}.gz"
 
         with (
-            open(self.log_path, "rb") as f_in,
+            Path(self.log_path).open("rb") as f_in,
             gzip.open(gz_log, "wb") as f_out,
         ):
             shutil.copyfileobj(f_in, f_out)
 
-        with open(self.log_path, "w"):
+        with Path(self.log_path).open("w"):
             pass
 
     def pop_utc_date(self, data: dict[str, Any]) -> str:
