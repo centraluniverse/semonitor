@@ -50,6 +50,20 @@ def test_append_adds_to_the_existing_output(run_semonitor, golden, sample):
     )
 
 
+def test_a_run_of_messages_without_parser_is_logged_once(run_semonitor, golden):
+    # The recording starts with 572 payloads that were encrypted.
+    result = run_semonitor("-v", "-x", golden("rec", "7f104920"))
+
+    lines = result.stderr.splitlines()
+    assert lines.count("No parser for PROT_CMD_MISC_PAYLOAD_ENC (0x003d)") == 1
+    assert any(
+        x.startswith(
+            "Previous message occurred 572 times in total, 571 not shown"
+        )
+        for x in lines
+    )
+
+
 def test_unknown_option_is_a_usage_error(run_semonitor):
     result = run_semonitor("--no-such-option")
 
