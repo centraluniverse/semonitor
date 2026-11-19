@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from se import env, se2csv, se2file, se2graphite, se2json, se2state, seprint
+from se import (
+    env,
+    se2csv,
+    se2file,
+    se2graphite,
+    se2hass,
+    se2json,
+    se2state,
+    seprint,
+)
 
 DEVICE = {
     "Date": "2020-01-01",
@@ -265,3 +274,56 @@ def test_se2json_main_defaults_to_the_arguments_of_the_process(
     se2json.main()
 
     assert capsys.readouterr().out == "[null]\n"
+
+
+# --key without --cert is a usage error that is found before main() opens
+# anything, so these tests do not open sockets.
+def test_se2hass_main_uses_the_arguments_it_is_given(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["se2hass", "--no-such-option"])
+
+    with pytest.raises(SystemExit) as exit_:
+        se2hass.main(["--key", "key.pem"])
+
+    assert exit_.value.code == 2
+    assert "--key needs --cert" in capsys.readouterr().err
+
+
+def test_se2hass_main_defaults_to_the_arguments_of_the_process(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr("sys.argv", ["se2hass", "--key", "key.pem"])
+
+    with pytest.raises(SystemExit) as exit_:
+        se2hass.main()
+
+    assert exit_.value.code == 2
+    assert "--key needs --cert" in capsys.readouterr().err
+
+
+def test_se2hass_main_prints_the_help_of_the_arguments_it_is_given(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr("sys.argv", ["se2hass", "--no-such-option"])
+
+    with pytest.raises(SystemExit) as exit_:
+        se2hass.main(["-h"])
+
+    assert exit_.value.code == 0
+    assert "--state-file" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("short", "long"),
+    [
+        (["-S", "state.json"], ["--state-file", "state.json"]),
+        (["-C", "cert.pem"], ["--cert", "cert.pem"]),
+    ],
+)
+def test_the_long_options_of_se2hass_are_the_short_ones(short, long):
+    parse = se2hass.build_parser().parse_args
+
+    assert vars(parse(long)) == vars(parse(short))
+
+
+def test_se2hass_port_zero_is_accepted_by_the_parser():
+    assert se2hass.build_parser().parse_args(["-p", "0"]).port == 0

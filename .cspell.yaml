@@ -70,6 +70,7 @@ words:
   - tshark
   - wireshark
   # tools and distribution packaging
+  - addext
   - addopts
   - adduser
   - codespell
@@ -81,17 +82,23 @@ words:
   - fromdateiso
   - htmlcov
   - junitxml
+  - keyout
   - moreutils
+  - newkey
   - nofile
   - nologin
   - numprocesses
+  - paramgen
   - perflint
+  - pkeyopt
   - pygrep
   - pyupgrade
   - refurb
   - sudoedit
   - testpaths
+  - tini
   - tryceratops
+  - veth
   - wlist
   - worksteal
   # python modules and functions
@@ -103,6 +110,7 @@ words:
   - dateutil
   - getdefaulttimeout
   - getfixturevalue
+  - gethostname
   - gettz
   - gmtime
   - gmtoff
@@ -111,6 +119,8 @@ words:
   - mday
   - mktime
   - setdefaulttimeout
+  - sockaddr
+  - surrogatepass
   - ttyname
   - tzset
   - tzutc
@@ -132,6 +142,7 @@ words:
   # variable names, mostly of the utilities
   - addrs
   - baudrate
+  - cafile
   - clientid
   - cpart
   - curday

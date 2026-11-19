@@ -40,6 +40,8 @@ main()
 	_bin="${VENV:+${VENV}/bin/}"
 
 	check_imports
+
+	"${_bin}se2hass" --help > '/dev/null'
 }
 
 main "${@}"

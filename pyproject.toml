@@ -26,14 +26,16 @@ test = [
 ]
 
 [project.optional-dependencies]
+hass = ["ifaddr", "zeroconf"]
 influx = ["influxdb"]
 mqtt = ["paho-mqtt<2"]
-all = ["semonitor[influx,mqtt]"]
+all = ["semonitor[hass,influx,mqtt]"]
 
 [project.scripts]
 se2csv = "se.se2csv:main"
 se2file = "se.se2file:main"
 se2graphite = "se.se2graphite:main"
+se2hass = "se.se2hass:main"
 se2hex = "se.se2hex:main"
 se2influx = "se.se2influx:main"
 se2json = "se.se2json:main"
@@ -83,6 +85,7 @@ skip_empty = true
 builtin = "clear,rare,en-GB_to_en-US"
 skip = "*.csv,*.json,*.md,*.msg,*.pcap,*.rec,LICENSE"
 ignore-regex = '\bcancelled\(\)'  # GitHub Actions spells it as `cancelled()`.
+ignore-words-list = "hass"  # Home Assistant, as in the `hass` extra.
 
 [tool.ruff]
 line-length = 80
