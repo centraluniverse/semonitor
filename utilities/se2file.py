@@ -13,10 +13,15 @@ def _open_input(args, files):
     """
     Open the file to read from, which stays open until files is closed.
 
-    Exits with status 1 if the file cannot be opened.
+    Args:
+        args: The parsed command line arguments, infile names the input.
+        files: The ExitStack that keeps the file open until it is closed.
 
     Returns:
         sys.stdin when the input is "stdin", else the open file.
+
+    Raises:
+        SystemExit: With status 1 if the file cannot be opened.
     """
     if args.infile == "stdin":
         return sys.stdin
@@ -24,7 +29,7 @@ def _open_input(args, files):
         return files.enter_context(Path(args.infile).open())
     except OSError:
         sys.stderr.write(f"We could not open {args.infile}. Exiting\n")
-        sys.exit(1)
+        raise SystemExit(1) from None
 
 
 def _output_path(args, curtime):
