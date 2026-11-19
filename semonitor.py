@@ -25,7 +25,6 @@ MASTER_MSG_INTERVAL = 5
 MASTER_MSG_TIMEOUT = 10
 MASTER_ADDR = 0xfffffffe
 SEQ_FILE_NAME = "seseq.txt"
-UPDATE_SIZE = 0x80000
 
 # global variables
 threadLock = threading.Lock()  # lock to synchronize reads and writes
@@ -42,7 +41,6 @@ def terminate(code=0, msg=b""):
 # process the input data
 def readData(args, mode, state, dataFile, recFile, outFile):
     eof = False
-    updateBuf = list(b"\x00" * UPDATE_SIZE) if args.updatefile else []
     if mode.passiveMode:
         # skip data until the start of the first complete message
         (msg, eof) = se.msg.readMsg(dataFile, recFile, mode, state)
@@ -50,18 +48,13 @@ def readData(args, mode, state, dataFile, recFile, outFile):
         (msg, eof) = se.msg.readMsg(dataFile, recFile, mode, state)
         if eof:  # end of file
             logger.info("End of file")
-            # eof from network means connection was broken, wait for a reconnect and continue
-            if mode.networkDevice:
-                se.files.closeData(dataFile, True)
-                dataFile = se.files.openDataSocket(args.ports)
-                eof = False
         if msg == b"\x00" * len(msg):  # ignore messages containing all zeros
             logger.data(msg)
         else:
             with threadLock:
                 se.logutils.setState(state, "threadLock", True)
                 try:
-                    processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf)
+                    processMsg(msg, args, mode, state, dataFile, recFile, outFile)
                 except Exception as ex:
                     logger.info("Failed to parse message: "+str(ex))
                     for l in se.logutils.format_data(msg):
@@ -69,13 +62,10 @@ def readData(args, mode, state, dataFile, recFile, outFile):
                     if args.xerror:
                         raise
                 se.logutils.setState(state, "threadLock", False)
-    # all finished
-    if args.updatefile:  # write the firmware update file
-        writeUpdate(updateBuf, args.updatefile)
     return
 
 # process a received message
-def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
+def processMsg(msg, args, mode, state, dataFile, recFile, outFile):
     # parse the message
     (msgSeq, fromAddr, toAddr, function, data) = se.msg.parseMsg(msg)
     if function == 0:
@@ -88,9 +78,7 @@ def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
         if function == se.commands.PROT_CMD_SERVER_POST_DATA and data:  # performance data
             # write performance data to output file
             se.data.writeData(msgData, outFile)
-        elif updateBuf and function == se.commands.PROT_CMD_UPGRADE_WRITE:  # firmware update data
-            updateBuf[msgData["offset"]:msgData["offset"] + msgData["length"]] = msgData["data"]
-        if mode.networkDevice or mode.masterMode:  # send reply
+        if mode.masterMode:  # send reply
             replyFunction = b""
             if function == se.commands.PROT_CMD_SERVER_POST_DATA:  # performance data
                 # send ack
@@ -111,13 +99,6 @@ def processMsg(msg, args, mode, state, dataFile, recFile, outFile, updateBuf):
             if replyFunction:
                 msg = se.msg.formatMsg(msgSeq, toAddr, fromAddr, replyFunction, replyData)
                 se.msg.sendMsg(dataFile, msg, recFile)
-
-# write firmware image to file
-def writeUpdate(updateBuf, updateFileName):
-    updateBuf = b"".join(updateBuf)
-    logger.info("writing %s", updateFileName)
-    with open(updateFileName, "wb") as updateFile:
-        updateFile.write(updateBuf)
 
 # RS485 master commands thread
 def masterCommands(state, dataFile, recFile, slaveAddrs):
@@ -232,9 +213,7 @@ if __name__ == "__main__":
 
     # open the specified data source
     logger.info("opening %s", args.datasource)
-    if args.datasource == "network":
-        dataFile =  se.files.openDataSocket(args.ports)
-    elif mode.serialDevice:
+    if mode.serialDevice:
         dataFile =  se.files.openSerial(args.datasource, args.baudrate)
     else:
         dataFile =  se.files.openInFile(args.datasource)
@@ -253,11 +232,11 @@ if __name__ == "__main__":
     if mode.passiveMode:  # only reading from file or serial device
         # read until eof then terminate
         readData(args, mode, state, dataFile, recFile, outFile)
-    else:  # reading and writing to network or serial device
+    else:  # reading and writing to a serial device
         if args.commands:  # commands were specified
             # perform commands then terminate
             doCommands(args, mode, state, dataFile, recFile, outFile)
-        else:  # interacting over network or RS485
+        else:  # interacting over RS232 or RS485
             # start a separate thread for reading
             readThread = threading.Thread(
                 name=READ_THREAD_NAME,
@@ -272,5 +251,5 @@ if __name__ == "__main__":
             block(state)
 
     # cleanup
-    se.files.closeData(dataFile, mode.networkDevice)
+    se.files.closeData(dataFile)
     se.files.closeOutFiles(recFile, outFile)
