@@ -180,6 +180,180 @@ def test_format_data_takes_any_sequence_of_ints(kind):
     assert list(se.logutils.format_data(kind([1, 171]))) == [hex_line([1, 171])]
 
 
+# --- consecutive duplicates --------------------------------------------------
+
+
+class Lines(logging.Handler):
+    """Collect what its filters let through, as the message that is shown."""
+
+    def __init__(self):
+        super().__init__(logging.NOTSET)
+        self.lines = []
+
+    def emit(self, record):
+        self.lines.append(record.getMessage())
+
+
+@pytest.fixture
+def shown(logger):
+    handler = Lines()
+    handler.addFilter(se.logutils.ConsecutiveDuplicateFilter())
+    logger.addHandler(handler)
+    logger.setLevel(se.logutils.LOG_LEVEL_RAW)
+    yield handler.lines
+    logger.removeHandler(handler)
+    logger.setLevel(logging.NOTSET)
+
+
+def test_a_repeated_message_is_logged_once(logger, shown):
+    for _ in range(5):
+        logger.info("same")
+
+    assert shown == ["same"]
+
+
+def test_the_message_that_ends_a_run_tells_how_often_it_was_repeated(
+    logger, shown
+):
+    for _ in range(4):
+        logger.info("same")
+    logger.info("other")
+
+    assert shown == [
+        "same",
+        "Previous message occurred 4 times in total, 3 not shown\nother",
+    ]
+
+
+def test_a_message_without_repeat_is_not_annotated(logger, shown):
+    logger.info("same")
+    logger.info("other")
+
+    assert shown == ["same", "other"]
+
+
+def test_the_count_starts_again_after_it_was_reported(logger, shown):
+    for message in ("a", "a", "a", "b", "b", "c"):
+        logger.info(message)
+
+    assert shown == [
+        "a",
+        "Previous message occurred 3 times in total, 2 not shown\nb",
+        "Previous message occurred 2 times in total, 1 not shown\nc",
+    ]
+
+
+def test_a_message_that_comes_back_later_is_logged_again(logger, shown):
+    logger.info("same")
+    for _ in range(100):
+        logger.info("other")
+    logger.info("same")
+
+    assert shown == [
+        "same",
+        "other",
+        "Previous message occurred 100 times in total, 99 not shown\nsame",
+    ]
+
+
+def test_messages_are_compared_with_their_arguments(logger, shown):
+    for number in (1, 1, 2, 2, 1):
+        logger.info("value %d", number)
+
+    assert shown == [
+        "value 1",
+        "Previous message occurred 2 times in total, 1 not shown\nvalue 2",
+        "Previous message occurred 2 times in total, 1 not shown\nvalue 1",
+    ]
+
+
+def test_the_same_message_at_another_level_is_not_a_repeat(logger, shown):
+    logger.info("same")
+    logger.warning("same")
+    logger.info("same")
+
+    assert shown == ["same", "same", "same"]
+
+
+def test_the_same_message_of_another_logger_is_not_a_repeat(logger, shown):
+    other = logging.getLogger(f"{LOGGER_NAME}.other")
+
+    logger.info("same")
+    other.info("same")
+
+    assert shown == ["same", "same"]
+
+
+@pytest.mark.parametrize("method", ["data", "raw"])
+def test_the_lines_of_a_hex_dump_are_never_collapsed(logger, shown, method):
+    for _ in range(3):
+        getattr(logger, method)(hex_line(bytes(16)))
+
+    assert shown == [hex_line(bytes(16))] * 3
+
+
+def test_a_hex_dump_line_ends_a_run_of_messages(logger, shown):
+    logger.info("same")
+    logger.data(hex_line(bytes(2)))
+    logger.info("same")
+
+    assert shown == ["same", hex_line(bytes(2)), "same"]
+
+
+def test_the_lowest_level_that_is_collapsed_can_be_changed(logger):
+    handler = Lines()
+    handler.addFilter(
+        se.logutils.ConsecutiveDuplicateFilter(min_level=logging.WARNING)
+    )
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        for level in (
+            logging.INFO,
+            logging.INFO,
+            logging.WARNING,
+            logging.WARNING,
+        ):
+            logger.log(level, "same")
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(logging.NOTSET)
+
+    assert handler.lines == ["same", "same", "same"]
+
+
+def test_a_message_with_a_percent_sign_survives_the_annotation(logger, shown):
+    logger.info("same")
+    logger.info("same")
+    logger.info("100%% of %s", "all")
+
+    assert shown == [
+        "same",
+        "Previous message occurred 2 times in total, 1 not shown\n100% of all",
+    ]
+
+
+def test_the_filter_can_be_used_from_many_threads(logger, shown):
+    barrier = threading.Barrier(4)
+
+    def log_same():
+        barrier.wait()
+        for _ in range(250):
+            logger.info("same")
+
+    threads = [threading.Thread(target=log_same) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    logger.info("end")
+
+    assert shown == [
+        "same",
+        "Previous message occurred 1000 times in total, 999 not shown\nend",
+    ]
+
+
 # --- state -------------------------------------------------------------------
 
 

@@ -7,6 +7,7 @@ records, and helpers to dump messages and state variables to the log.
 
 import logging
 import sys
+import threading
 import time
 import traceback
 
@@ -56,6 +57,55 @@ def format_data(data):
 logging.Logger.data = _data_log
 logging.Logger.raw = _raw_log
 logging.Logger.message = _message_log
+
+
+class ConsecutiveDuplicateFilter(logging.Filter):
+    """
+    Drop a log record that repeats the one before it.
+
+    Only an uninterrupted run of the same record, from the same logger and at
+    the same level, is collapsed. The same record that comes back after
+    another one is logged again. The record that ends a run is preceded, on a
+    line of its own, by how many times the message occurred in total and how
+    many of those occurrences were not shown.
+
+    The DATA and RAW levels are never collapsed, because the lines of a hex
+    dump are often the same.
+
+    Add it to a handler, not to a logger: a logger only filters its own
+    records, and the handler sees just the records that its level lets by,
+    which are the ones that are shown.
+    """
+
+    def __init__(self, min_level=logging.DEBUG):
+        """
+        Initialize the filter.
+
+        Args:
+            min_level: The lowest level of the records that are collapsed.
+        """
+        super().__init__()
+        self.min_level = min_level
+        self._last = None
+        self._repeats = 0
+        self._lock = threading.Lock()  # handlers filter without their lock
+
+    def filter(self, record):
+        """Return whether the record is logged."""
+        key = (record.name, record.levelno, record.getMessage())
+        with self._lock:
+            if record.levelno >= self.min_level and key == self._last:
+                self._repeats += 1
+                return False
+            if self._repeats:
+                record.msg = (
+                    "Previous message occurred "
+                    f"{self._repeats + 1} times in total, "
+                    f"{self._repeats} not shown\n{record.msg}"
+                )
+                self._repeats = 0
+            self._last = key
+            return True
 
 
 def set_state(state, item, value):

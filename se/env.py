@@ -215,6 +215,9 @@ def _configure_logging(args):
         4: se.logutils.LOG_LEVEL_RAW,  # -vvvv debugRaw
     }.get(min(args.verbose, 4), logging.ERROR)
 
+    # a function that every message has would flood the log
+    handler.addFilter(se.logutils.ConsecutiveDuplicateFilter())
+
     # configure the root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level)

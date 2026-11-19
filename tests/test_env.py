@@ -310,6 +310,21 @@ def test_logs_to_stdout_when_asked(get_args, capsys):
     assert not captured.err
 
 
+def test_the_log_collapses_a_message_that_repeats(get_args, capsys):
+    get_args("-v")
+    capsys.readouterr()
+    logger = logging.getLogger("test_env.repeats")
+
+    for _ in range(3):
+        logger.info("same")
+    logger.info("other")
+    logger.info("same")
+
+    assert capsys.readouterr().err == (
+        "same\nPrevious message occurred 3 times in total, 2 not shown\nother\nsame\n"
+    )
+
+
 def test_logs_to_syslog_when_asked(get_args, monkeypatch):
     created = []
 
