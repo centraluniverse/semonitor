@@ -156,46 +156,55 @@ class ParseDevice(dict):
     _hypotheses: ClassVar[list[tuple[str, Callable[[Any], bool]]]] = []
 
     def __new__(cls, data, *, explorer=False):
-        """Return an instance of the subclass matching the data block's seType."""
+        """Return an instance of the subclass matching the data block's se_type."""
         # Some fancy footwork so that I can always start to create a
         # ParseDevice, but actually get a subclass which is appropriate for the
-        # seType encountered in the data block (provided a subclass specific to
+        # se_type encountered in the data block (provided a subclass specific to
         # the seType has been defined, of course).
         dev_hdr_len = 8
         (se_type, _se_id, _dev_len) = struct.unpack("<HLH", data[0:dev_hdr_len])
 
         # Search for a subclass which can handle this seType
+        device_class = cls
         for subclass in cls.__subclasses__():
             if subclass.se_type == se_type:
-                return subclass(data)
+                device_class = subclass
+                break
+        else:
+            # Otherwise either use a ParseDeviceExplorer (explorer=True),
+            # which is a special subclass which will parse almost anything,
+            # albeit with quite a number of nonsense parsings interspersed with occasional correctly parsed fields,
+            # or just a bare minimum instance of a dictionary (explorer=False).
+            if explorer:
+                # a special ParseDevice which tries almost every field parsing it knows about
+                device_class = ParseDeviceExplorer
 
-        # Otherwise either return a ParseDeviceExplorer (explorer=True),
-        # which is a special subclass which will parse almost anything,
-        # albeit with quite a number of nonsense parsings interspersed with
-        # occasional correctly parsed fields, or just return a bare minimum
-        # instance of a dictionary (explorer=False).
-        if explorer:
-            # return a special ParseDevice which tries almost every field
-            # parsing it knows about
-            return ParseDeviceExplorer(data)
-        # return an instance of a basic dictionary (the base class for
-        # ParseDevice itself)
-        new_instance = super().__new__(cls)
-        # (Re)setting a basically empty (unknown) definition for this instance
-        # is crucial because you may have already encountered another unknown
-        # device with a *different* length and field_defs, and the
-        # parse_dev_table method updates the *class* definition dynamically if
-        # it encounters more data than it expects.
-        new_instance.field_defs = [
-            [
-                4,
-                "L",
-                "dateTime",
-                "dateTime",
-                False,
-                "seconds, time since the epoch",
+        # Create the dictionary of the chosen class directly (and not with
+        # super().__new__ or the class itself, which would redirect to this
+        # method again), and parse the data block right here: __init__ is
+        # called again by Python for the returned instance, so parsing there
+        # would parse every data block twice.
+        new_instance = super().__new__(device_class)
+        if device_class is ParseDevice:
+            # (Re)setting a basically empty (unknown) definition for this
+            # instance is crucial because you may have already encountered
+            # another unknown device with a *different* length and field_defs,
+            # and the parse_dev_table method updates the *class* definition
+            # dynamically if it encounters more data than it expects.
+            new_instance.field_defs = [
+                [
+                    4,
+                    "L",
+                    "dateTime",
+                    "dateTime",
+                    False,
+                    "seconds, time since the epoch",
+                ]
             ]
-        ]
+        new_instance.parse_dev_table(data)
+        new_instance.set_derivation_defaults()
+        new_instance.code_derivations()
+        new_instance.check_hypotheses()
         return new_instance
 
     @staticmethod
@@ -289,19 +298,16 @@ class ParseDevice(dict):
 
     __hash__ = None
 
-    def __init__(self, data, **_kwargs):
+    def __init__(self, _data, **_kwargs):
         """
-        Parse the data block, then run the derivations and hypothesis checks.
+        Do nothing: __new__ has parsed the data block already.
 
         Args:
             data: The data block to parse.
             **_kwargs: Ignored. ParseDevice(data, explorer=...) passes the
                 keywords of __new__ to __init__ too.
         """
-        self.parse_dev_table(data)
-        self.set_derivation_defaults()
-        self.code_derivations()
-        self.check_hypotheses()
+        super().__init__()
 
     def parse_dev_table(self, data):
         """
@@ -578,18 +584,6 @@ class ParseDevice(dict):
 class ParseDevice0x0030(ParseDevice):
     """Parser for battery (seType 0x0030) data blocks."""
 
-    def __new__(cls, _data):
-        """Create a bare dictionary instance, without ParseDevice.__new__."""
-        # Create a bare minimum instance of a dictionary. ALL subclasses of
-        # ParseDevice MUST do this.
-        # NB This step is essential, because otherwise, when this subclass was
-        # instantiated / created, it would call the __new__ method of
-        # ParseDevice itself, which would redirect the creation to this
-        # subclass, and so on until the recursion limit was reached!
-        # PS Note that a more usual idiom would be super().__new__(cls), but that
-        # is the __new__ of ParseDevice, which is what we are trying to avoid!
-        return dict.__new__(cls)
-
     se_type = 0x0030
     _dev_name = "batteries"
     dev_type = f"{_dev_name}_{se_type:#06x}"
@@ -714,15 +708,6 @@ class ParseDevice0x0030(ParseDevice):
 
 class ParseDevice0x0022(ParseDevice):
     """Parser for meter (seType 0x0022) data blocks, one record per recType."""
-
-    def __new__(cls, _data):
-        """Create a bare dictionary instance, without ParseDevice.__new__."""
-        # Create a bare minimum instance of a dictionary.
-        # NB This step is essential, because otherwise, when this subclass was
-        # instantiated / created, it would call the __new__ method of
-        # ParseDevice itself, which would redirect the creation to this
-        # subclass, and so on until the recursion limit was reached!
-        return dict.__new__(cls)
 
     se_type = 0x0022
     _dev_name = "meters"
@@ -958,10 +943,6 @@ class ParseDevice0x0022(ParseDevice):
         is_zero("AlwaysZero_off34_int2"),
     ]
 
-    def __init__(self, data, **_kwargs):
-        """Parse the data block; extra keyword arguments are ignored."""
-        super().__init__(data)
-
     def code_derivations(self):
         """Replace the bogus large negative P2X values with NaN."""
         # Filter out some sporadic 'NaN'-like values which appear in P2X.  The
@@ -1027,14 +1008,6 @@ class ParseDeviceExplorer(ParseDevice):
     interpretations for each item have been determined, a new subclass of
     ParseDevice tailored to those items should be constructed.
     """
-
-    def __new__(cls, _data):
-        """Create a bare dictionary instance, without ParseDevice.__new__."""
-        # Create a bare minimum instance of a dictionary.
-        # NB This step is essential, because otherwise, when this subclass was instantiated / created, it would call
-        # the __new__ method of ParseDevice itself, which would redirect the creation to this subclass, and so on until
-        # the recursion limit was reached!
-        return dict.__new__(cls)
 
     se_type = 0xFFFF  # dummy value since ParseDeviceExplorer will "parse" any seType (albeit overly enthusiastically!)
     _dev_name = "explore"

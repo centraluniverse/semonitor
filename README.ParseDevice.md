@@ -20,7 +20,7 @@ more like a tutorial or cookbook than a manual.
 ## A very brief overview of `ParseDevice`
 
 `ParseDevice` is a subclass of a Python dictionary (`dict`) with a
-tailored `__init__` method. Given a block of your data, captured from
+tailored `__new__` method. Given a block of your data, captured from
 messages sent by a SolarEdge system, it extracts the `seType` from the
 header then uses a list of field definitions to parse the data block,
 and initializes itself with entries which map each field name to the
@@ -205,22 +205,13 @@ in the comments in the Python code itself.
 The underlying purpose of the `__new__` method was described in the
 introduction.
 
-The key point to be aware of is that since the actual construction of a
-new instance may be delegated to a subclass, it is **imperative** that
-all subclasses have their own explicit `__new__` method. Failure to do
-this results in a runtime recursion limit error!
-
-The `__new__` method for a subclass is not complicated - see for example
-`ParseDevice0x0030.__new__`:
-
-```python
-    def __new__(cls, data, explorer=False):
-        # Create a bare minimum instance of a dictionary.
-        # Note that a more usual idiom would be
-        # super(ParseDevice0x0030, cls).__new__(cls), but this
-        # would lead to the recursion that we are trying to avoid!
-        return super(ParseDevice, cls).__new__(cls)
-```
+The key point to be aware of is that the actual construction of a new
+instance is delegated to a subclass. `ParseDevice.__new__` picks the
+class, creates a bare dictionary of that class directly with
+`super().__new__(device_class)` (so it does not recurse into itself), and
+then parses the data block, runs the derivations and checks the
+hypotheses. Subclasses therefore do not need a `__new__` method of their
+own, and a data block is parsed exactly once.
 
 
 ### Defining the type of data that can be parsed
@@ -343,7 +334,7 @@ field_defs = [
 The `ParseDevice.parse_dev_table` method is responsible for parsing a
 block of data using the definitions in `field_defs` and storing the results
 as `name: value` entries in the ParseDevice dictionary. It is called
-by `ParseDevice.__init__`.
+by `ParseDevice.__new__`.
 
 Before beginning parsing, `parse_dev_table` compares the total length of
 the field definitions to the length (`devlen`) of the data block. If
@@ -519,20 +510,24 @@ to whatever value was provided for `self["PfromX"]` in the device data
 block.
 
 
-### `ParseDevice.__init__` and the explorer argument
+### `ParseDevice.__new__` and the explorer argument
 
-The `ParseDevice.__init__` method, inherited by all subclasses, is quite
-simple:
+After it has created the instance, the `ParseDevice.__new__` method runs
+the same four steps for every class, in this order:
 
 ```python
-    def __init__(self, data, explorer=False):
-        self.parse_dev_table(data)
-        self.set_derivation_defaults()
-        self.code_derivations()
-        self.check_hypotheses()
+        new_instance.parse_dev_table(data)
+        new_instance.set_derivation_defaults()
+        new_instance.code_derivations()
+        new_instance.check_hypotheses()
 ```
 
-Notice that the full signature of the method includes two arguments:
+Python calls `__init__` on the returned instance as well, with the same
+arguments. `ParseDevice.__init__` accepts them and does nothing, so
+nothing is parsed twice.
+
+Notice that the full signature of the `__new__` method includes two
+arguments:
 
 * `data` is the message data to be decoded, and
 * the `explorer` argument is a flag to instruct `ParseDevice` what to do
@@ -551,10 +546,9 @@ nonsense values, but this can be a useful exploratory step when
 trying to decipher a new device / `seType`.
 
 Subclasses do not use the `explorer` argument, since it only makes
-sense for the `ParseDevice.__new__` method (but it causes potential
-signature incompatibility problems if it does not exist, so include it
-anyway if you do code an explicit `__init__` for a subclass instead of
-just inheriting `ParseDevice.__init__`).
+sense for the `ParseDevice.__new__` method. If you do code an explicit
+`__init__` for a subclass, accept `**_kwargs` so that it can be called
+with it.
 
 To find out about the `check_hypotheses` method, see later, under "bells
 and whistles".
@@ -742,7 +736,7 @@ concept of hypotheses to `ParseDevice`.
 `_hypotheses` is a list of `(text, predicate)` pairs. The text describes
 the hypothesis, and the predicate is a function that takes the parsed
 device and returns `True` or `False`. The `check_hypotheses` method,
-invoked as the last step in the `__init__` method, simply calls the
+invoked as the last step in the `__new__` method, simply calls the
 predicates, and logs the text of any hypothesis that evaluates to `False`.
 The module provides the helpers `is_zero(name)` and `is_small(name)` that
 build the pairs for the two common cases. An example (taken from
@@ -914,7 +908,7 @@ believe I have read that 0x0018 may be one), in which case
 probably not know the correct length, `devlen`, for the data block!).
 
 If the correct header is known, this could be corrected by appropriate
-amendments in the subclass's own `__new__` method.
+amendments in the subclass's own `parse_dev_table` method.
 
 ---
 
