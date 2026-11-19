@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from se import env, se2csv, se2file, se2graphite, se2state, seprint
+from se import env, se2csv, se2file, se2graphite, se2json, se2state, seprint
 
 DEVICE = {
     "Date": "2020-01-01",
@@ -241,3 +241,27 @@ def test_the_long_options_of_se2influx_are_the_short_ones():
     assert parsed(parse_args, long) == parsed(parse_args, short)
     assert parsed(parse_args, short)["port"] == 9999
     assert isinstance(parsed(parse_args, short)["port"], int)
+
+
+def test_se2json_main_uses_the_arguments_it_is_given(
+    tmp_path, capsys, monkeypatch
+):
+    path = tmp_path / "in.json"
+    path.write_text("[NaN]\n")
+    monkeypatch.setattr("sys.argv", ["se2json", "--no-such-option"])
+
+    se2json.main([str(path)])
+
+    assert capsys.readouterr().out == "[null]\n"
+
+
+def test_se2json_main_defaults_to_the_arguments_of_the_process(
+    tmp_path, capsys, monkeypatch
+):
+    path = tmp_path / "in.json"
+    path.write_text("[NaN]\n")
+    monkeypatch.setattr("sys.argv", ["se2json", str(path)])
+
+    se2json.main()
+
+    assert capsys.readouterr().out == "[null]\n"

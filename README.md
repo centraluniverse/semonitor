@@ -249,6 +249,9 @@ JSON file that contains the current state of the inverter and optimizer values.
 separate comma-delimited file for each device type (e.g. inverter, optimizer,
 battery) encountered that is suitable for input to a spreadsheet.
 
+`se2json` reads a file containing JSON performance data and writes it as valid
+JSON, with the `NaN` values of semonitor turned into `null`.
+
 `se2graphite` reads a file containing JSON performance data and sends it to a
 graphite server's "pickle listener" port, with multiple metrics per
 transmission. With `-t` it sends it to the "text listener" port instead, one
@@ -271,7 +274,9 @@ The only deviation from standard JSON (RFC 8259) is that numbers can be `NaN`,
 not valid), which Python's `json` module reads and writes by default
 (`allow_nan=True`). A strict parser, such as `JSON.parse`, refuses these. In
 Python, `json.loads(line)` just works, and `json.loads(line,
-parse_constant=...)` can be used to turn them into something else
+parse_constant=...)` can be used to turn them into something else. For
+everything else, `se2json` turns them into `null` and so makes the output valid
+JSON.
 
 
 ### semonitor
@@ -595,6 +600,49 @@ Convert SolarEdge inverter performance monitoring data from JSON to CSV.
 Read from SE data file `yyyymmdd.json` and write CSV data with headers, for each
 device type encountered (e.g. optimizers, inverters, batteries), to files called
 `yyyymmdd."deviceType".csv`
+
+
+### se2json
+
+Convert the JSON performance data of semonitor to valid JSON. Python's `json`
+module writes `NaN` for a value that is not valid (see [JSON
+format](#json-format)), and a strict JSON parser refuses it. `se2json` writes
+`null` instead of `NaN`, `Infinity` and `-Infinity`, and changes nothing else.
+
+
+#### Usage
+
+```sh
+    se2json [inFile]
+```
+
+
+#### Arguments
+
+```text
+    inFile          File containing performance data in JSON format. (default:
+                    stdin)
+```
+
+The output is written to stdout, one line for every line that is read, and
+every line is written as soon as it is read, so `se2json` can be used in a
+pipe. A line that is not JSON stops it, with an error that names the line.
+
+
+#### Examples
+
+```sh
+    semonitor -t 2 /dev/ttyUSB0 | se2json > 'yyyymmdd.json'
+```
+
+Passively read the RS485 bus from the serial port `/dev/ttyUSB0` and write the
+performance data as valid JSON to the file `yyyymmdd.json`.
+
+A strict parser, such as `json_pp` (which comes with Perl), refuses it:
+
+```sh
+    semonitor -t 2 /dev/ttyUSB0 | se2json | json_pp
+```
 
 
 ### se2graphite
