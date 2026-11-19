@@ -129,4 +129,65 @@ services:
     restart: unless-stopped
 ```
 
+
+## Running se2hass
+
+`se2hass` pushes the output of semonitor to Home Assistant, and announces itself
+with mDNS (`_semonitor._tcp`) so that Home Assistant can find and pair with it.
+The image contains its dependencies. As it reads the output of `semonitor`, run
+both in a pipeline. This is a separate service, as it has no `networks`:
+
+```yaml
+volumes:
+  semonitor:
+
+services:
+  se2hass:
+    image: ghcr.io/jbuehl/solaredge:master
+    network_mode: host
+    init: true
+    cap_drop:
+      - all
+    devices:
+      - /dev/solaredge:/dev/ttyUSB0
+    env_file:
+      - common.env
+    volumes:
+      - semonitor:/var/lib/semonitor:rw
+    command:
+      - sh
+      - -c
+      - semonitor -m -s 1234567 -t 4 /dev/ttyUSB0 | se2hass
+    restart: unless-stopped
+```
+
+* **Host network:** mDNS uses multicast, which does not leave a bridge network,
+  so without `network_mode: host` Home Assistant cannot find `se2hass`. The
+  pairing API listens on port 22222/tcp of the host, or on the port given with
+  `-p`. Open it in the firewall if there is one.
+* **Init:** `init: true` runs `tini` as PID 1, which reaps the processes that
+  are left over. It forwards SIGTERM only to the shell, not to the programs in
+  the pipeline, and `exec` cannot be used for a pipeline. When the container
+  stops they are killed, so `se2hass` does not get to send its mDNS goodbye,
+  and Home Assistant keeps seeing the announcement until it expires.
+* **Command:** the entrypoint runs a first argument that is an existing command
+  as it is, which is why `sh` can be used here instead of `semonitor`.
+* **State:** the pairing and the pairing code are kept in
+  `/var/lib/semonitor/se2hass.json`, on the volume that `semonitor` uses, so
+  they survive a restart of the container.
+* **Interfaces:** with the host network, the addresses of `docker0` and of the
+  `veth` interfaces can end up in the announcement. Use `-b` with the address
+  of the host to announce that one only.
+
+The pairing code is logged at every start. Find it with
+
+```sh
+docker compose logs se2hass
+```
+
+Without `--cert` and `--key` the API uses plain HTTP, and the code is sent in
+the clear when Home Assistant pairs. To serve it over HTTPS, mount a
+certificate and key into the container and pass them with `--cert` and `--key`.
+The options are described in [se2hass](README.md#se2hass) in the README.
+
 [docker]: https://www.docker.com/

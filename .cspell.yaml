@@ -89,7 +89,9 @@ words:
   - refurb
   - sudoedit
   - testpaths
+  - tini
   - tryceratops
+  - veth
   - worksteal
   # python modules and functions
   - autouse
@@ -100,6 +102,7 @@ words:
   - dateutil
   - getdefaulttimeout
   - getfixturevalue
+  - gethostname
   - gettz
   - gmtime
   - keepends
@@ -107,6 +110,7 @@ words:
   - mday
   - mktime
   - setdefaulttimeout
+  - sockaddr
   - ttyname
   - tzset
   - tzutc
@@ -115,6 +119,7 @@ words:
   - usefixtures
   # programs and files of this project
   - debugfile
+  - hass
   - infile
   - recfile
   - seextract
@@ -127,7 +132,9 @@ words:
   - winsyslog
   # variable names, mostly of the utilities
   - addrs
+  - advertisable
   - baudrate
+  - cafile
   - clientid
   - cpart
   - curday

@@ -251,6 +251,10 @@ battery) encountered that is suitable for input to a spreadsheet.
 `se2json` reads a file containing JSON performance data and writes it as valid
 JSON, with the `NaN` values of semonitor turned into `null`.
 
+`se2hass` reads a file containing JSON performance data and pushes it to a
+Home Assistant webhook. It announces itself on the local network with mDNS, so
+that Home Assistant can find it and pair with it.
+
 `se2graphite` reads a file containing JSON performance data and sends it to a
 graphite server's "pickle listener" port, with multiple metrics per
 transmission. With `-t` it sends it to the "text listener" port instead, one
@@ -613,6 +617,138 @@ A strict parser, such as `json_pp` (which comes with Perl), refuses it:
 ```sh
     semonitor -t -2 | se2json | json_pp
 ```
+
+
+### se2hass
+
+Push the JSON performance data of semonitor to a Home Assistant webhook.
+`se2hass` announces itself with mDNS as `_semonitor._tcp`, and has a small HTTP
+API, `POST /pair`, with which Home Assistant hands over the address of its
+webhook. Once paired, every line that is read is sent to that webhook.
+
+The contract with the Home Assistant integration is not final: the pairing
+request and the mDNS record may still change.
+
+`se2hass` needs the `hass` extra, which brings in the `zeroconf` and `ifaddr`
+packages:
+
+```sh
+    pip install 'semonitor[hass]'
+```
+
+
+#### Usage
+
+```sh
+    se2hass [options] [inFile]
+```
+
+
+#### Arguments
+
+```text
+    inFile          File containing performance data in JSON format. (default:
+                    stdin)
+```
+
+
+#### Options
+
+```text
+    -b, --bind address
+                    Address to listen on for the pairing requests, and to
+                    announce. (default: all interfaces)
+    -p, --port port
+                    Port to listen on. (default: 22222)
+    -f, --state-file file
+                    File that keeps the pairing and the pairing code.
+                    (default: /var/lib/semonitor/se2hass.json)
+    --cert file     Certificate (PEM) to serve the pairing API with HTTPS.
+                    Without it, the API uses plain HTTP.
+    --key file      Private key (PEM) of the certificate. Needs --cert.
+    --cafile file   CA certificates (PEM) to verify the certificate of Home
+                    Assistant with, for one with a private CA. (default: the
+                    system CAs)
+    --insecure      Do not verify the certificate of Home Assistant. (default:
+                    off)
+    -v              Show debug messages. The default is to show messages from
+                    INFO on.
+```
+
+The `semonitor` output is read from stdin, or from `inFile`, and is not changed
+in any way, except that `NaN` becomes `null` as in `se2json`. A line that is
+not JSON is logged with its number and skipped.
+
+An event, such as a fault, is sent as it is read: `se2hass` does not set it to
+zero afterwards. The receiver has to do that.
+
+When a push to Home Assistant fails, or Home Assistant does not answer with a
+`2xx`, `se2hass` logs a warning and drops the lines for 60 seconds, before it
+tries again. Because of that, reading the input never blocks, and so neither
+does `semonitor`.
+
+Home Assistant answers `200` for a webhook it does not know, so a stale
+pairing cannot be detected. Pair again to recover.
+
+
+#### Pairing
+
+The first time it starts, `se2hass` generates a pairing code, ten characters
+shown as `XXXXX-XXXXX`, from letters and digits that are hard to mix up. It is
+written to the log at every start, at INFO level, and is kept in the state file
+with the pairing, so it survives restarts. The code is never sent over mDNS.
+
+Home Assistant pairs by posting a JSON object to `/pair`:
+
+```json
+{"hass_url": "https://hass.example:8123", "webhook_id": "abc123", "code": "XXXXX-XXXXX"}
+```
+
+`hass_url` has to be an `http` or `https` URL and `webhook_id` can only have
+letters, digits, `-` and `_`. The case of the code does not matter, and `-` and
+spaces in it are ignored. Pairing again with the code replaces the pairing.
+
+| Code | Meaning |
+| ---- | ------- |
+| 200 | Paired. The answer is `{"status": "paired"}`. |
+| 400 | The body is not a JSON object, or `hass_url` or `webhook_id` is not valid. |
+| 401 | The `code` is missing. |
+| 403 | The `code` is wrong. |
+| 404 | Not `POST /pair`. |
+| 411 | No `Content-Length`. |
+| 413 | The body is larger than 4 KiB. |
+| 429 | Too many wrong codes. Try again after the `Retry-After` seconds. |
+
+After 5 wrong codes in a row, `/pair` answers `429` for 60 seconds, for every
+client. A right code starts the count again.
+
+To get a new code, stop `se2hass` and delete the state file. This also drops
+the pairing, so Home Assistant has to pair again.
+
+> **Warning**: Over plain HTTP the code is sent in the clear, and so can be
+> read by anyone on the network who can see the traffic, who can then point the
+> webhook somewhere else. `se2hass` warns about it at the start. Use `--cert`
+> and `--key` to serve the API with HTTPS. The webhook of Home Assistant is
+> pushed to over the `hass_url` that was given, so use an `https` one for
+> that, too.
+
+The state file is only readable by its owner, as it holds the webhook.
+
+
+#### Examples
+
+```sh
+    semonitor -t 4 /dev/ttyUSB0 | tee yyyymmdd.json | se2hass
+```
+
+Passively read the RS485 bus from the serial port `/dev/ttyUSB0`, write the
+performance data to the file `yyyymmdd.json`, and push it to Home Assistant.
+
+```sh
+    semonitor -t 4 /dev/ttyUSB0 | se2hass --cert hass.pem --key hass.key
+```
+
+The same, with the pairing API served over HTTPS.
 
 
 ### se2graphite
