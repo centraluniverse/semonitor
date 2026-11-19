@@ -22,7 +22,7 @@ def _open_input(args, files):
         return files.enter_context(Path(args.infile).open())
     except OSError:
         sys.stderr.write(f"We could not open {args.infile}. Exiting\n")
-        sys.exit(1)
+        raise SystemExit(1) from None
 
 
 def _output_path(args, curtime):
