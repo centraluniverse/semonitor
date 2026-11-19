@@ -71,7 +71,9 @@ def parse_data(function, data):
     Decode the payload of a protocol message.
 
     Functions without arguments, and functions with no known parser, are
-    returned as a hex string of their data. Unknown functions are logged.
+    returned as a hex string of their data. Every function is logged by its
+    name and code, as unknown if it has no name: at debug level when it was
+    parsed, at info level when it has no parser.
 
     Args:
         function: The function code of the message.
@@ -80,14 +82,16 @@ def parse_data(function, data):
     Returns:
         The decoded payload, a dict for most functions, or a hex string.
     """
+    name = se.commands.code2function.get(function, "unknown function")
     if function in NO_ARGUMENTS:
-        return "".join(x.encode("hex") for x in data)
-    parser = DATA_PARSERS.get(function)
-    if parser is not None:
-        return parser(data)
-    # unknown function type
-    logger.info("Unknown function 0x%04x", function)
-    return codecs.encode(data, "hex").decode("ascii")
+        parsed = "".join(x.encode("hex") for x in data)
+    elif function in DATA_PARSERS:
+        parsed = DATA_PARSERS[function](data)
+    else:
+        logger.info("No parser for %s (0x%04x)", name, function)
+        return codecs.encode(data, "hex").decode("ascii")
+    logger.debug("Parsed %s (0x%04x)", name, function)
+    return parsed
 
 
 def parse_energy_stats(data):

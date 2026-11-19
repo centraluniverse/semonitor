@@ -267,15 +267,32 @@ def test_recorded_time_reply_is_the_time_and_the_offset(
     assert se.data.format_time(stamp, tz_offset) == payload
 
 
+# The functions without a parser.
+
+
 @pytest.mark.parametrize(
-    ("sample", "function"),
+    ("sample", "function", "message"),
     [
-        ("7f104920", 0x003D),
-        ("7f104920", 0x0503),
-        ("Geoff99.190801.1135.test", 0x03C2),
+        (
+            "7f104920",
+            se.commands.PROT_CMD_MISC_PAYLOAD_ENC,
+            "No parser for PROT_CMD_MISC_PAYLOAD_ENC (0x003d)",
+        ),
+        (
+            "7f104920",
+            se.commands.PROT_CMD_SERVER_GET_PRIVKEY,
+            "No parser for PROT_CMD_SERVER_GET_PRIVKEY (0x0503)",
+        ),
+        (
+            "Geoff99.190801.1135.test",
+            0x03C2,
+            "No parser for unknown function (0x03c2)",
+        ),
     ],
 )
-def test_recorded_unknown_functions_are_hex_dumps(sample, function, caplog):
+def test_recorded_functions_without_parser_are_hex_dumps(
+    sample, function, message, caplog
+):
     caplog.set_level("INFO")
     payload = frames_of(sample, function)[0]
     assert payload
@@ -283,7 +300,82 @@ def test_recorded_unknown_functions_are_hex_dumps(sample, function, caplog):
     parsed = se.data.parse_data(function, payload)
 
     assert parsed == payload.hex()
-    assert f"Unknown function 0x{function:04x}" in caplog.messages
+    assert message in caplog.messages
+
+
+def test_a_named_function_without_parser_is_logged_by_name(caplog):
+    caplog.set_level("INFO")
+    function = se.commands.PROT_CMD_MISC_GET_MAX_PACKET_SIZE
+    assert function not in se.data.DATA_PARSERS
+    assert function not in se.data.NO_ARGUMENTS
+
+    se.data.parse_data(function, b"\x01")
+
+    assert caplog.messages == [
+        "No parser for PROT_CMD_MISC_GET_MAX_PACKET_SIZE (0x0039)"
+    ]
+
+
+def test_every_function_without_parser_is_logged(caplog):
+    caplog.set_level("INFO")
+
+    for function in (0x7FFF, 0x7FFE, 0x7FFF):
+        se.data.parse_data(function, b"")
+
+    assert caplog.messages == [
+        "No parser for unknown function (0x7fff)",
+        "No parser for unknown function (0x7ffe)",
+        "No parser for unknown function (0x7fff)",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("function", "payload", "name"),
+    [
+        pytest.param(
+            function,
+            payload,
+            se.commands.code2function[function],
+            id=se.commands.code2function[function],
+        )
+        for function, payload, _ in DECODED_FUNCTIONS.values()
+    ],
+)
+def test_a_parsed_function_is_logged_by_name_at_debug(
+    function, payload, name, caplog
+):
+    caplog.set_level("DEBUG")
+
+    se.data.parse_data(function, payload)
+
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("DEBUG", f"Parsed {name} (0x{function:04x})")
+    ]
+
+
+def test_a_function_without_arguments_is_logged_as_parsed(caplog):
+    caplog.set_level("DEBUG")
+
+    se.data.parse_data(se.commands.PROT_RESP_ACK, b"")
+
+    assert caplog.messages == ["Parsed PROT_RESP_ACK (0x0080)"]
+
+
+def test_a_parsed_function_is_not_logged_at_info(caplog):
+    caplog.set_level("INFO")
+
+    se.data.parse_data(se.commands.PROT_RESP_ACK, b"")
+
+    assert caplog.messages == []
+
+
+def test_a_function_that_fails_to_parse_is_not_logged_as_parsed(caplog):
+    caplog.set_level("DEBUG")
+
+    with pytest.raises(struct.error):
+        se.data.parse_data(se.commands.PROT_RESP_SERVER_GMT, b"\x01")
+
+    assert caplog.messages == []
 
 
 def test_recorded_posts_are_written_as_the_golden_json(sample, golden):
@@ -337,7 +429,7 @@ def test_parse_data_of_an_unknown_function_without_payload_is_empty(caplog):
     caplog.set_level("INFO")
 
     assert se.data.parse_data(0x7FFF, b"") == ""
-    assert "Unknown function 0x7fff" in caplog.messages
+    assert "No parser for unknown function (0x7fff)" in caplog.messages
 
 
 def test_parse_data_logs_what_it_decodes(caplog):
