@@ -34,12 +34,11 @@ import time
 
 from common import open_input, unwrap_metrics_dict
 
-try:
-    import syslog
-except ImportError:
-    # Allow for the fact that syslog is not (to my knowledge) available on
-    # Windows
+if sys.platform == "win32":
+    # syslog is not available on Windows
     import seWindowsSyslog as syslog
+else:
+    import syslog
 
 
 def log(*args):
