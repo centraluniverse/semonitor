@@ -1,6 +1,6 @@
 import json
 
-from se import se2csv, seprint
+from se import se2csv, se2json, seprint
 
 DEVICE = {
     "Date": "2020-01-01",
@@ -44,3 +44,27 @@ def test_se2csv_main_uses_the_arguments_it_is_given(tmp_path, monkeypatch):
     se2csv.main(["-p", str(tmp_path / "out"), str(path)])
 
     assert (tmp_path / "out.inverters.csv").exists()
+
+
+def test_se2json_main_uses_the_arguments_it_is_given(
+    tmp_path, capsys, monkeypatch
+):
+    path = tmp_path / "in.json"
+    path.write_text("[NaN]\n")
+    monkeypatch.setattr("sys.argv", ["se2json", "--no-such-option"])
+
+    se2json.main([str(path)])
+
+    assert capsys.readouterr().out == "[null]\n"
+
+
+def test_se2json_main_defaults_to_the_arguments_of_the_process(
+    tmp_path, capsys, monkeypatch
+):
+    path = tmp_path / "in.json"
+    path.write_text("[NaN]\n")
+    monkeypatch.setattr("sys.argv", ["se2json", str(path)])
+
+    se2json.main()
+
+    assert capsys.readouterr().out == "[null]\n"
