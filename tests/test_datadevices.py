@@ -710,7 +710,6 @@ def test_battery_with_nonzero_unused_field_logs_failed_hypothesis(
     }
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #36")
 @pytest.mark.parametrize("record", BATTERIES)
 def test_failed_hypothesis_is_logged_once(record, caplog):
     with caplog.at_level(logging.WARNING):
@@ -881,18 +880,9 @@ def test_meter_item_names_are_the_exported_fields():
     ("record", "explorer"),
     [
         *_retag(UNKNOWN, "unknown", explorer=False),
-        *[
-            pytest.param(
-                *param.values,
-                id=param.id,
-                marks=pytest.mark.xfail(strict=True, reason="Issue #36"),
-            )
-            for param in [
-                *_retag(BATTERIES, "battery", explorer=False),
-                *_retag(METERS, "meter", explorer=False),
-                *_retag(UNKNOWN, "explorer", explorer=True),
-            ]
-        ],
+        *_retag(BATTERIES, "battery", explorer=False),
+        *_retag(METERS, "meter", explorer=False),
+        *_retag(UNKNOWN, "explorer", explorer=True),
     ],
 )
 def test_each_record_is_parsed_once(parse_calls, record, explorer):
@@ -1051,7 +1041,6 @@ def test_explorer_item_names_list_everything_it_parsed(record):
     ]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #36")
 @pytest.mark.parametrize("record", UNKNOWN)
 def test_explorer_item_names_are_not_repeated(record):
     ParseDevice(record, explorer=True)
