@@ -1,0 +1,178 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Copyright (C) 2026 Olliver Schinagl <oliver@schinagl.nl>
+
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semonitor"
+description = "Monitor SolarEdge inverters and optimizers"
+dynamic = ["version"]
+requires-python = ">=3.14"
+dependencies = ["pyserial>=3.5"]
+
+# Tooling, which is not part of semonitor, installed with `--group NAME`.
+# Deliberately unpinned, the nightly CI run will trigger this.
+[dependency-groups]
+dev = ["pre-commit"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-timeout",
+    "pytest-xdist",
+    "python-dateutil",
+]
+
+[project.optional-dependencies]
+hass = ["ifaddr", "zeroconf"]
+influx = ["influxdb"]
+mqtt = ["paho-mqtt<2"]
+all = ["semonitor[hass,influx,mqtt]"]
+
+[project.scripts]
+se2csv = "se.se2csv:main"
+se2file = "se.se2file:main"
+se2graphite = "se.se2graphite:main"
+se2hass = "se.se2hass:main"
+se2hex = "se.se2hex:main"
+se2influx = "se.se2influx:main"
+se2json = "se.se2json:main"
+se2mqtt = "se.se2mqtt:main"
+se2state = "se.se2state:main"
+semonitor = "se.semonitor:main"
+seprint = "se.seprint:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The version is taken from the git tags, the same way as `git describe`.
+# Without git (e.g. a container build, where .git is not copied) set
+# SETUPTOOLS_SCM_PRETEND_VERSION, or the fallback version is used.
+[tool.setuptools_scm]
+fallback_version = "0+unknown"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--durations=10",
+    "--durations-min=0.5",
+    "--dist=worksteal",
+    "--numprocesses=auto",
+    "--strict-config",
+    "--strict-markers",
+]
+pythonpath = ["src"]
+testpaths = ["tests"]
+timeout = 120
+
+[tool.coverage.run]
+branch = true
+patch = ["subprocess"]
+sigterm = true
+source = ["src"]
+omit = [
+    "*/.git/*",
+    "*/.venv/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.codespell]
+builtin = "clear,rare,en-GB_to_en-US"
+skip = "*.csv,*.json,*.md,*.msg,*.pcap,*.rec,LICENSE"
+ignore-regex = '\bcancelled\(\)'  # GitHub Actions spells it as `cancelled()`.
+ignore-words-list = "hass"  # Home Assistant, as in the `hass` extra.
+
+[tool.ruff]
+line-length = 80
+extend-exclude = ["test"]
+
+[tool.ruff.format]
+# Always LF, the same as .editorconfig.
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "A",    # flake8-builtins
+    "ARG",  # flake8-unused-arguments
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "C90",  # mccabe
+    "D",    # pydocstyle
+    "D213", # multi-line-summary-second-line
+    "D401", # non-imperative-mood
+    "D402", # signature-in-docstring
+    "D403", # first-word-uncapitalized
+    "DOC201", # docstring-missing-returns
+    "DOC202", # docstring-extraneous-returns
+    "DOC402", # docstring-missing-yields
+    "DOC403", # docstring-extraneous-yields
+    "DOC501", # docstring-missing-exception
+    "DOC502", # docstring-extraneous-exception
+    "DTZ",  # flake8-datetimez
+    "E",    # pycodestyle errors
+    "EM",   # flake8-errmsg
+    "ERA",  # eradicate
+    "F",    # pyflakes
+    "FBT",  # flake8-boolean-trap
+    "FURB", # refurb
+    "G",    # flake8-logging-format
+    "I",    # isort
+    "ICN",  # flake8-import-conventions
+    "INP",  # flake8-no-pep420
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "N",    # pep8-naming
+    "PERF", # perflint
+    "PGH",  # pygrep-hooks
+    "PIE",  # flake8-pie
+    "PL",   # pylint
+    "PT",   # flake8-pytest-style
+    "PTH",  # flake8-use-pathlib
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # ruff-specific rules
+    "S",    # flake8-bandit
+    "SIM",  # flake8-simplify
+    "SLF",  # flake8-self
+    "T20",  # flake8-print
+    "TC",   # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "TRY",  # tryceratops
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+ignore = [
+    "D212", # multi-line-summary-first-line, the summary starts on the second line (D213)
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps at 80; E501 only flags lines beyond 120.
+max-line-length = 120
+max-doc-length = 80
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "D1",      # undocumented-public-*
+    "DOC",     # docstring sections, the tests are documented by their names
+    "PLR0913", # too-many-arguments
+    "PLR0917", # too-many-positional-arguments
+    "PLR2004", # magic-value-comparison
+    "S101",    # assert
+    "S301",    # suspicious-pickle-usage
+    "S603",    # subprocess-without-shell-equals-true
+]
