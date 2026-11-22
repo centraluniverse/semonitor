@@ -210,7 +210,7 @@ def test_commands_are_split_per_command_and_argument(get_args, value, expected):
 def test_invalid_commands_are_rejected(usage_error, value, bad):
     message = usage_error("-c", value, "-s", "1")
 
-    assert message == f"argument -c: Invalid command: {bad}\n"
+    assert message == f"argument -c/--commands: Invalid command: {bad}\n"
 
 
 @pytest.mark.parametrize(
@@ -242,7 +242,7 @@ def test_slaves_are_a_list_of_ids(get_args, value, expected):
 def test_invalid_slaves_are_rejected(usage_error, value, bad):
     message = usage_error("-s", value)
 
-    assert message == f"argument -s: Invalid slave ID: {bad}\n"
+    assert message == f"argument -s/--slave: Invalid slave ID: {bad}\n"
 
 
 @pytest.mark.parametrize("value", ["2", "4"])
@@ -256,7 +256,7 @@ def test_type_accepts_rs232_and_rs485(get_args, serial_port, value):
 def test_type_rejects_other_values(usage_error, value):
     message = usage_error("-t", value)
 
-    assert message.startswith("argument -t: invalid choice: ")
+    assert message.startswith("argument -t/--type: invalid choice: ")
 
 
 @pytest.mark.parametrize("option", ["-p"])
@@ -269,7 +269,7 @@ def test_options_of_other_versions_are_gone(usage_error, option):
 def test_baudrate_must_be_a_number(usage_error):
     message = usage_error("-b", "fast")
 
-    assert "argument -b: invalid int value: 'fast'" in message
+    assert "argument -b/--baudrate: invalid int value: 'fast'" in message
 
 
 def test_unknown_option_is_a_usage_error(usage_error):

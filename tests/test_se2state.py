@@ -85,7 +85,7 @@ def line(inverters=None, optimizers=None, events=None):
 def test_initializing_writes_a_zeroed_state_before_any_input(
     workdir, monkeypatch
 ):
-    run_se2state(monkeypatch, [], "-i", "I1,I2", "-o", "state.json")
+    run_se2state(monkeypatch, [], "-s", "I1,I2", "-S", "state.json")
 
     state = read_state(workdir / "state.json")
     zero = {
@@ -107,7 +107,7 @@ def test_initializing_replaces_an_existing_state(workdir, monkeypatch):
         json.dumps({"inverters": {"stats": {"Eday": 99.0}}, "optimizers": {}})
     )
 
-    run_se2state(monkeypatch, [], "-i", "I1", "-o", "state.json")
+    run_se2state(monkeypatch, [], "-s", "I1", "-S", "state.json")
 
     assert (
         read_state(workdir / "state.json")["inverters"]["stats"]["Eday"] == 0.0
@@ -136,7 +136,7 @@ def test_without_initializing_an_existing_state_is_continued(
     )
 
     run_se2state(
-        monkeypatch, [line({"I1": inverter(Eday=10.0)})], "-o", "state.json"
+        monkeypatch, [line({"I1": inverter(Eday=10.0)})], "-S", "state.json"
     )
 
     # Eday of the stats never goes down
@@ -148,20 +148,20 @@ def test_without_initializing_an_existing_state_is_continued(
 def test_without_initializing_a_missing_state_is_started_empty(
     workdir, monkeypatch
 ):
-    run_se2state(monkeypatch, [line({"I1": inverter()})], "-o", "state.json")
+    run_se2state(monkeypatch, [line({"I1": inverter()})], "-S", "state.json")
 
     assert read_state(workdir / "state.json")["inverters"]["I1"] == inverter()
 
 
 def test_the_output_file_is_required(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-i", "I1"])
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-s", "I1"])
     monkeypatch.setattr(sys, "stdin", Input([]))
 
     with pytest.raises(SystemExit) as exit_:
         runpy.run_path(str(SCRIPT), run_name="__main__")
 
     assert exit_.value.code == 2
-    assert "-o" in capsys.readouterr().err
+    assert "-S" in capsys.readouterr().err
 
 
 # --- updating the state ------------------------------------------------------
@@ -174,9 +174,9 @@ def test_devices_are_added_to_the_state_and_updated(workdir, monkeypatch):
             line({"I1": inverter(Pac=1.0)}, {"O1": optimizer()}),
             line({"I1": inverter(Pac=2.0), "I2": inverter(Pac=3.0)}),
         ],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -201,9 +201,9 @@ def test_the_state_file_is_written_after_every_line(workdir, monkeypatch):
     run_se2state(
         monkeypatch,
         [line({"I1": inverter(Pac=1.0)}), line({"I1": inverter(Pac=2.0)})],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -228,9 +228,9 @@ def test_the_statistics_sum_or_average_over_the_inverters(workdir, monkeypatch):
                 }
             )
         ],
-        "-i",
+        "-s",
         "I1,I2",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -246,9 +246,9 @@ def test_the_stats_entry_is_not_counted_as_a_device(workdir, monkeypatch):
     run_se2state(
         monkeypatch,
         [line({"I1": inverter(Vac=240.0, Pac=100.0)})],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -264,9 +264,9 @@ def test_eday_of_the_statistics_only_increases(workdir, monkeypatch):
             line({"I1": inverter(Eday=10.0)}),
             line({"I1": inverter(Eday=4.0)}),
         ],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -279,9 +279,9 @@ def test_eday_of_the_statistics_follows_an_increase(workdir, monkeypatch):
     run_se2state(
         monkeypatch,
         [line({"I1": inverter(Eday=10.0)}), line({"I1": inverter(Eday=12.5)})],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -296,9 +296,9 @@ def test_the_power_of_an_optimizer_is_voltage_times_current(
     run_se2state(
         monkeypatch,
         [line(optimizers={"O1": optimizer(Vmod=30.0, Imod=2.5)})],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -316,9 +316,9 @@ def test_the_optimizer_temperature_is_averaged(workdir, monkeypatch):
                 }
             )
         ],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -329,7 +329,7 @@ def test_the_optimizer_temperature_is_averaged(workdir, monkeypatch):
 def test_without_devices_the_averages_are_zero_and_not_an_error(
     workdir, monkeypatch
 ):
-    run_se2state(monkeypatch, [line()], "-i", "I1", "-o", "state.json")
+    run_se2state(monkeypatch, [line()], "-s", "I1", "-S", "state.json")
 
     state = read_state(workdir / "state.json")
     assert state["inverters"]["stats"]["Temp"] == 0
@@ -348,9 +348,9 @@ def test_an_event_zeroes_the_current_values_of_the_devices(
             line({"I1": inverter()}, {"O1": optimizer()}),
             line(events={"I1": {"Type": 1}}),
         ],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 
@@ -365,7 +365,7 @@ def test_an_event_zeroes_the_current_values_of_the_devices(
 
 def test_without_an_event_the_values_are_kept(workdir, monkeypatch):
     run_se2state(
-        monkeypatch, [line({"I1": inverter()})], "-i", "I1", "-o", "state.json"
+        monkeypatch, [line({"I1": inverter()})], "-s", "I1", "-S", "state.json"
     )
 
     assert read_state(workdir / "state.json")["inverters"]["I1"]["Pac"] == 100.0
@@ -376,7 +376,7 @@ def test_without_an_event_the_values_are_kept(workdir, monkeypatch):
 
 def test_invalid_json_is_an_error(monkeypatch):
     monkeypatch.setattr(
-        sys, "argv", [str(SCRIPT), "-i", "I1", "-o", "state.json"]
+        sys, "argv", [str(SCRIPT), "-s", "I1", "-S", "state.json"]
     )
     monkeypatch.setattr(sys, "stdin", Input(["not json\n"]))
 
@@ -391,9 +391,9 @@ def test_waits_for_data_instead_of_spinning(monkeypatch):
     run_se2state(
         monkeypatch,
         ["", "", line({"I1": inverter()})],
-        "-i",
+        "-s",
         "I1",
-        "-o",
+        "-S",
         "state.json",
     )
 

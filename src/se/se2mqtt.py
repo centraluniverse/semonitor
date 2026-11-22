@@ -2,27 +2,27 @@ r"""
 Send JSON performance data to Mosquitto MQTT broker.
 
 Options:
-    -c Mosquitto client ID
-    -u Mosquitto client user ID
-    -p Mosquitto client password
-    -s Mosquitto server (DNS or IP address)
-    -t Mosquitto MQTT topic to publish to
+    -j, --client-id   Mosquitto client ID
+    -u, --username    Mosquitto client user ID
+    -W, --password    Mosquitto client password
+    -H, --host        Mosquitto server (DNS or IP address)
+    -T, --topic       Mosquitto MQTT topic to publish to
 
 Example:
     Follow /root/solaredge/performance.json and publish to topic
     "/ha/value/solaredge" on server "mosquitto.domain.local" with client ID
     "solaredge" and user "solaredge" and password "s0lar3dg3"::
 
-        python3 se2MQTT.py -c solaredge -u solaredge -p s0lar3dg3 \\
-            -s mosquitto.domain.local -t /ha/value/solaredge \\
-            /root/solaredge/performance.json
+        python3 se2MQTT.py --client-id solaredge --username solaredge \
+            --password s0lar3dg3 --host mosquitto.domain.local \
+            --topic /ha/value/solaredge /root/solaredge/performance.json
 
     Or pipe the output of semonitor directly into se2MQTT.py::
 
-        python3 semonitor.py -t 4 -d /root/solaredge/selog.txt -s 7f123456 \\
-            -vvvv /dev/ttyUSB0 | \\
-            python3 se2MQTT.py -c solaredge -u solaredge -p s0lar3dg3 \\
-            -s mosquitto.domain.local -t /ha/value/solaredge
+        python3 semonitor.py -t 4 -d /root/solaredge/selog.txt -s 7f123456 \
+            -vvvv /dev/ttyUSB0 | \
+            python3 se2MQTT.py -j solaredge -u solaredge -W s0lar3dg3 \
+            -H mosquitto.domain.local -T /ha/value/solaredge
 """
 
 import argparse
@@ -50,22 +50,36 @@ def parse_args(argv):
         description="Publish SolarEdge performance data to a Mosquitto broker.",
     )
     parser.add_argument(
-        "-c", dest="clientid", required=True, help="Mosquitto client ID"
+        "-j",
+        "--client-id",
+        dest="clientid",
+        required=True,
+        help="Mosquitto client ID",
     )
     parser.add_argument(
-        "-u", dest="user", required=True, help="Mosquitto client user ID"
+        "-u",
+        "--username",
+        dest="user",
+        required=True,
+        help="Mosquitto client user ID",
     )
     parser.add_argument(
-        "-p", dest="passwd", required=True, help="Mosquitto client password"
+        "-W",
+        "--password",
+        dest="passwd",
+        required=True,
+        help="Mosquitto client password",
     )
     parser.add_argument(
-        "-s",
+        "-H",
+        "--host",
         dest="server",
         required=True,
         help="Mosquitto server (DNS or IP address)",
     )
     parser.add_argument(
-        "-t",
+        "-T",
+        "--topic",
         dest="topic",
         required=True,
         help="Mosquitto MQTT topic to publish to",

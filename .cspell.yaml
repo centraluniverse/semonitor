@@ -112,7 +112,7 @@ words:
   - unhexlify
   - usefixtures
   # programs and files of this project
-  - debugfile
+  - hass
   - infile
   - recfile
   - seextract

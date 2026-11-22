@@ -24,13 +24,16 @@ def deprecated(_s):
     raise argparse.ArgumentTypeError(msg)
 
 
-def main(argv=None):
+def parse_args(argv=None):
     """
-    Write a CSV file per device type from the JSON performance data read.
+    Parse the command line arguments.
 
     Args:
         argv: The command line arguments to use, or None for those of the
             process.
+
+    Returns:
+        The parsed arguments.
     """
     parser = argparse.ArgumentParser(
         description=(
@@ -43,38 +46,48 @@ def main(argv=None):
     )
     parser.add_argument(
         "-a",
+        "--append",
         dest="append",
         action="store_true",
         default=False,
         help="append to inverter and optimizer files",
     )
     parser.add_argument(
-        "-d", dest="delimiter", default=",", help="CSV file delimiter"
+        "-F",
+        "--delimiter",
+        dest="delimiter",
+        default=",",
+        help="CSV file delimiter",
     )
     parser.add_argument(
-        "-t",
+        "-L",
+        "--headers",
         dest="headers",
         action="store_true",
         default=False,
         help="write column headers to CSV files",
     )
     parser.add_argument(
-        "-p", dest="prefix", required=True, help="prefix for all CSV filenames"
+        "-P",
+        "--prefix",
+        dest="prefix",
+        required=True,
+        help="prefix for all CSV filenames",
     )
     parser.add_argument(
         "-i",
         type=deprecated,
-        help='The -i option is deprecated, use -p "csvFileNamePrefix" instead.',
+        help='The -i option is deprecated, use -P "csvFileNamePrefix" instead.',
     )
     parser.add_argument(
         "-o",
         type=deprecated,
-        help='The -o option is deprecated, use -p "csvFileNamePrefix" instead.',
+        help='The -o option is deprecated, use -P "csvFileNamePrefix" instead.',
     )
     parser.add_argument(
         "-e",
         type=deprecated,
-        help='The -e option is deprecated, use -p "csvFileNamePrefix" instead.',
+        help='The -e option is deprecated, use -P "csvFileNamePrefix" instead.',
     )
     parser.add_argument(
         "infile",
@@ -84,7 +97,18 @@ def main(argv=None):
         help="file containing performance data in JSON format",
     )
 
-    args = parser.parse_args(argv)
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    """
+    Write a CSV file per device type from the JSON performance data read.
+
+    Args:
+        argv: The command line arguments to use, or None for those of the
+            process.
+    """
+    args = parse_args(argv)
 
     devs_file = {}
 

@@ -59,20 +59,20 @@ def normalized(text):
 
 def test_prefix_is_required(monkeypatch, capsys):
     assert run_se2csv(monkeypatch) == 2
-    assert "-p" in capsys.readouterr().err
+    assert "-P" in capsys.readouterr().err
 
 
 def test_help_describes_the_tool(monkeypatch, capsys):
     assert run_se2csv(monkeypatch, "-h") == 0
 
     out = capsys.readouterr().out
-    for option in ("-a", "-d", "-t", "-p"):
+    for option in ("-a", "-F", "-L", "-P"):
         assert option in out
 
 
 @pytest.mark.parametrize("option", ["-i", "-o", "-e"])
 def test_deprecated_options_are_refused(monkeypatch, capsys, option):
-    assert run_se2csv(monkeypatch, "-p", "out", option, "x") == 2
+    assert run_se2csv(monkeypatch, "-P", "out", option, "x") == 2
     assert "deprecated" in capsys.readouterr().err.lower()
 
 
@@ -87,7 +87,7 @@ def test_each_device_type_gets_its_own_file(workdir, monkeypatch):
         },
     )
 
-    assert run_se2csv(monkeypatch, "-p", "out", stdin=stdin) == 0
+    assert run_se2csv(monkeypatch, "-P", "out", stdin=stdin) == 0
 
     assert sorted(path.name for path in workdir.iterdir()) == [
         "out.inverters.csv",
@@ -100,7 +100,7 @@ def test_the_identifier_is_the_first_column_and_the_rest_is_sorted(
 ):
     stdin = line(inverters={"I1": inverter("I1")})
 
-    run_se2csv(monkeypatch, "-p", "out", "-t", stdin=stdin)
+    run_se2csv(monkeypatch, "-P", "out", "-L", stdin=stdin)
 
     assert (workdir / "out.inverters.csv").read_text().splitlines() == [
         "__Identifier__,Date,ID,Pac,Time",
@@ -111,7 +111,7 @@ def test_the_identifier_is_the_first_column_and_the_rest_is_sorted(
 def test_headers_are_only_written_on_request(workdir, monkeypatch):
     stdin = line(inverters={"I1": inverter("I1")})
 
-    run_se2csv(monkeypatch, "-p", "out", stdin=stdin)
+    run_se2csv(monkeypatch, "-P", "out", stdin=stdin)
 
     assert (workdir / "out.inverters.csv").read_text().splitlines() == [
         "I1,2016-01-01,I1,1.5,12:00:00"
@@ -122,7 +122,7 @@ def test_a_row_is_written_for_every_device_of_every_line(workdir, monkeypatch):
     stdin = line(inverters={"I1": inverter("I1"), "I2": inverter("I2")})
     stdin += line(inverters={"I1": inverter("I1", Pac=2.5)})
 
-    run_se2csv(monkeypatch, "-p", "out", stdin=stdin)
+    run_se2csv(monkeypatch, "-P", "out", stdin=stdin)
 
     rows = (workdir / "out.inverters.csv").read_text().splitlines()
     assert [row.split(",")[0] for row in rows] == ["I1", "I2", "I1"]
@@ -132,7 +132,7 @@ def test_a_row_is_written_for_every_device_of_every_line(workdir, monkeypatch):
 def test_the_delimiter_can_be_changed(workdir, monkeypatch):
     stdin = line(inverters={"I1": inverter("I1")})
 
-    run_se2csv(monkeypatch, "-p", "out", "-d", ";", "-t", stdin=stdin)
+    run_se2csv(monkeypatch, "-P", "out", "-F", ";", "-L", stdin=stdin)
 
     assert (workdir / "out.inverters.csv").read_text().splitlines()[0] == (
         "__Identifier__;Date;ID;Pac;Time"
@@ -144,7 +144,7 @@ def test_the_prefix_may_contain_a_directory(workdir, monkeypatch):
 
     run_se2csv(
         monkeypatch,
-        "-p",
+        "-P",
         workdir / "sub" / "site",
         stdin=line(inverters={"I1": inverter("I1")}),
     )
@@ -156,7 +156,7 @@ def test_the_file_is_overwritten_without_append(workdir, monkeypatch):
     (workdir / "out.inverters.csv").write_text("old\n")
 
     run_se2csv(
-        monkeypatch, "-p", "out", stdin=line(inverters={"I1": inverter("I1")})
+        monkeypatch, "-P", "out", stdin=line(inverters={"I1": inverter("I1")})
     )
 
     assert "old" not in (workdir / "out.inverters.csv").read_text()
@@ -167,7 +167,7 @@ def test_the_file_is_extended_with_append(workdir, monkeypatch):
 
     run_se2csv(
         monkeypatch,
-        "-p",
+        "-P",
         "out",
         "-a",
         stdin=line(inverters={"I1": inverter("I1")}),
@@ -180,25 +180,25 @@ def test_the_file_is_extended_with_append(workdir, monkeypatch):
 
 
 def test_no_input_creates_no_files(workdir, monkeypatch):
-    assert run_se2csv(monkeypatch, "-p", "out", stdin="") == 0
+    assert run_se2csv(monkeypatch, "-P", "out", stdin="") == 0
 
     assert list(workdir.iterdir()) == []
 
 
 def test_lines_without_devices_create_no_files(workdir, monkeypatch):
-    assert run_se2csv(monkeypatch, "-p", "out", stdin=line() * 3) == 0
+    assert run_se2csv(monkeypatch, "-P", "out", stdin=line() * 3) == 0
 
     assert list(workdir.iterdir()) == []
 
 
 def test_a_missing_input_file_is_an_error(monkeypatch, capsys):
-    assert run_se2csv(monkeypatch, "-p", "out", "missing.json") == 2
+    assert run_se2csv(monkeypatch, "-P", "out", "missing.json") == 2
     assert "missing.json" in capsys.readouterr().err
 
 
 def test_invalid_json_is_an_error_not_a_silent_skip(monkeypatch):
     with pytest.raises(json.JSONDecodeError):
-        run_se2csv(monkeypatch, "-p", "out", stdin="not json\n")
+        run_se2csv(monkeypatch, "-P", "out", stdin="not json\n")
 
 
 def test_device_names_with_spaces_are_made_safe_for_file_names(
@@ -208,7 +208,7 @@ def test_device_names_with_spaces_are_made_safe_for_file_names(
         **{"Unknown device": {"I 1": inverter("I 1")}},
     )
 
-    run_se2csv(monkeypatch, "-p", "out", stdin=stdin)
+    run_se2csv(monkeypatch, "-P", "out", stdin=stdin)
 
     assert (workdir / "out.Unknown_device.csv").is_file()
 
@@ -220,7 +220,7 @@ def test_nan_and_infinity_from_semonitor_are_written_as_floats(
     row = inverter("I1", Temp=float("nan"), Vdc=float("-inf"))
 
     run_se2csv(
-        monkeypatch, "-p", "out", "-t", stdin=line(inverters={"I1": row})
+        monkeypatch, "-P", "out", "-L", stdin=line(inverters={"I1": row})
     )
 
     header, data = (workdir / "out.inverters.csv").read_text().splitlines()

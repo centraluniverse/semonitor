@@ -11,15 +11,15 @@ import pytest
 CLI = Path(__file__).resolve().parent.parent / "src" / "se"
 SCRIPT = CLI / "se2mqtt.py"
 ALL_OPTIONS = (
-    "-c",
+    "-j",
     "client",
     "-u",
     "user",
-    "-p",
+    "-W",
     "secret",
-    "-s",
+    "-H",
     "broker",
-    "-t",
+    "-T",
     "/ha/solar",
 )
 
@@ -247,7 +247,7 @@ def test_invalid_json_is_an_error(monkeypatch):
 # Without -t (or the others) there is nowhere to publish to. This has to be
 # reported as a usage error before any message is read.
 def test_the_options_are_all_required_to_publish(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-c", "client"])
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-j", "client"])
     monkeypatch.setattr(sys, "stdin", Input([line({"I1": inverter()})]))
 
     with pytest.raises(SystemExit) as exit_:

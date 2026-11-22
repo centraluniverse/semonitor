@@ -12,7 +12,7 @@ ExecStart=/bin/sh -c '\
   semonitor $${OPTIONS} -s "$${INVERTERS}" "$${DEVICE}" | \
   stdbuf -oL uniq | \
   tee "$${STATE_DIRECTORY}/$$(date +%%Y%%m%%d%%H%%M%%S).json" | \
-  se2state -i "$${INVERTERS}" -o "$${STATE_DIRECTORY}/solar.json"'
+  se2state -s "$${INVERTERS}" -S "$${STATE_DIRECTORY}/solar.json"'
 Restart=always
 RestartSec=60
 

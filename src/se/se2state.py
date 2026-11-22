@@ -43,17 +43,19 @@ def parse_args(argv):
         ),
     )
     parser.add_argument(
-        "-i",
+        "-s",
+        "--slave",
         dest="inverters",
         type=inverter_list,
         metavar="INVERTER[,INVERTER...]",
         help=(
-            "initialize the state file with these inverter IDs, rather than "
-            "using an existing one"
+            "initialize the state file with these comma delimited SolarEdge "
+            "slave inverter IDs, rather than using an existing one"
         ),
     )
     parser.add_argument(
-        "-o",
+        "-S",
+        "--state-file",
         dest="out_file_name",
         required=True,
         metavar="STATEFILE",

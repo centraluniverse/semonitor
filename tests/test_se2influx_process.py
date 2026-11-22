@@ -108,7 +108,6 @@ def test_every_option_can_be_given(parse):
 @pytest.mark.parametrize(
     ("option", "attribute", "value"),
     [
-        ("--port", "port", 9999),
         ("--retries", "retries", 5),
         ("--udp_port", "udp_port", 5555),
         ("--queue_size", "queue_size", 50),
@@ -117,6 +116,12 @@ def test_every_option_can_be_given(parse):
 )
 def test_numeric_options_are_numbers(parse, option, attribute, value):
     assert getattr(parse(option, str(value)), attribute) == value
+
+
+# --port is a number since it has type=int, which is what Issue #27 asked for.
+def test_the_port_is_a_number(parse):
+    assert parse("--port", "9999").port == 9999
+    assert parse("-p", "9999").port == 9999
 
 
 @pytest.mark.parametrize("option", ["--timeout", "--stat_timer_secs"])

@@ -218,8 +218,9 @@ OPTIONS="-v -t 4 -m -n"
   inverters. It has no default and must be set.
 * `DEVICE` is the serial port the inverters are connected to.
 * `OPTIONS` are the options of `semonitor`, such as the type of the serial port
-  (`-t 4` for RS485, `-t 2` for RS232) and whether semonitor is the master of
-  the bus (`-m`). Passive monitoring of an RS485 bus is `-t 4` without `-m`.
+  (`--type 4` for RS485, `--type 2` for RS232) and whether semonitor is the
+  master of the bus (`--master`). Passive monitoring of an RS485 bus is
+  `--type 4` without `--master`.
 
 The service starts once the time is synchronized, as the inverter's clock is
 set from it. It writes the data into `/var/lib/semonitor`, one JSON file for
@@ -305,28 +306,31 @@ SolarEdge inverter performance monitoring using the SolarEdge protocol.
 #### Options
 
 ```text
-    -a                   append to existing output files
-    -b                   baud rate for serial data source (default: 115200)
-    -c cmd[/cmd/...]     send the specified command functions
-    -d debugfile         where to send debug messages (stdout|syslog|filename)
-                         (default: syslog)
-    -f                   wait for appended data as the input file grows
-                         (as in tail -f)
-    -m                   function as an RS485 master
-    -n HH:MM|default|event
-                         exit once a day at the nadir, when the sun is lowest,
-                         or when the inverter sends its end-of-day event
-    -o outfile           write performance data to the specified file in
-                         JSON format (default: stdout)
-                         __date__ and __datetime__ are replaced with the
-                         current date and time, also in folders
-                         (data/__date__/out.json)
-    -r recfile           file to record all incoming and outgoing messages to
-                         (supports __date__ and __datetime__ like -o)
-    -s inv[,inv,...]     comma delimited list of SolarEdge slave inverter IDs
-    -t 2|4               data source type (2=RS232, 4=RS485)
-    -v                   verbose output
-    -x                   halt on data exception
+    -a, --append          append to existing output files
+    -b, --baudrate BAUD   baud rate for serial data source (default: 115200)
+    -c, --commands cmd[/cmd/...]
+                          send the specified command functions
+    -d, --logfile logfile where to send log messages: stderr, syslog, stdout
+                          or a file name (default: stderr)
+    -f, --follow          wait for appended data as the input file grows
+                          (as in tail -f)
+    -m, --master          function as an RS485 master
+    -n, --nadir HH:MM|default|event
+                          exit once a day at the nadir, when the sun is lowest,
+                          or when the inverter sends its end-of-day event
+    -o, --outfile outfile write performance data to the specified file in
+                          JSON format (default: stdout)
+                          __date__ and __datetime__ are replaced with the
+                          current date and time, also in folders
+                          (data/__date__/out.json)
+    -r, --record recfile  file to record all incoming and outgoing messages to
+                          (supports __date__ and __datetime__ like -o)
+    -s, --slave inv[,inv,...]
+                          comma delimited list of SolarEdge slave inverter IDs
+    -t, --type 2|4        data source type (2=RS232, 4=RS485)
+    -v, --verbose         verbose output
+    -x, --xerror          halt on data exception
+    -h, --help            show the help message and exit
 ```
 
 
@@ -410,28 +414,28 @@ this sequence number across multiple executions of `semonitor`.
 #### Examples
 
 ```sh
-    semonitor -o yyyymmdd.json yyyymmdd.dat
+    semonitor --outfile yyyymmdd.json yyyymmdd.dat
 ```
 
 Read from SE data file `yyyymmdd.dat` and write data to the JSON file
 `yyyymmdd.json`.
 
 ```sh
-    semonitor -o yyyymmdd.json -m -s 7f101234,7f105678 -t 4 COM4
+    semonitor --outfile yyyymmdd.json --master --slave 7f101234,7f105678 --type 4 COM4
 ```
 
 Function as an RS485 master to request data from the inverters `7f101234` and
 `7f105678` using RS485 serial port COM4.
 
 ```sh
-    semonitor -c 0012,H0329 -s 7f101234 -t 2 /dev/ttyUSB0
+    semonitor --commands 0012,H0329 --slave 7f101234 --type 2 /dev/ttyUSB0
 ```
 
 Send a command to the inverter `7f101234` to request the value of parameter
 `0x0329` using RS232 serial port /dev/ttyUSB0. Display the messages on stdout.
 
 ```sh
-    semonitor -c 0011,H329,L0/0030,H01f4,L0 -s 7f101234 -t 2 /dev/ttyUSB0
+    semonitor --commands 0011,H329,L0/0030,H01f4,L0 --slave 7f101234 --type 2 /dev/ttyUSB0
 ```
 
 Send commands to the inverter `7f101234` to set the value of parameter `0x0329`
@@ -477,11 +481,13 @@ optimizers.
 #### Options
 
 ```text
-    -i inverter[,inverter...] Initialize the state file using the specified inverter
-                    IDs rather than using an existing one.
-    -o stateFile    File containing the current (last read) data values for each
-                    inverter and optimizer values from the input file. It will
-                    be overwritten every time that new data is read.
+    -s, --slave inverter[,inverter...]
+                    Initialize the state file using the specified SolarEdge
+                    slave inverter IDs rather than using an existing one.
+    -S, --state-file stateFile
+                    File containing the current (last read) data values for
+                    each inverter and optimizer values from the input file. It
+                    will be overwritten every time that new data is read.
     -h, --help      show the help message and exit
 ```
 
@@ -493,7 +499,7 @@ data to the file yyyymmdd.json and also maintain the file solar.json with the
 current state.
 
 ```sh
-    semonitor -t 4 /dev/ttyUSB0 | tee yyyymmdd.json | se2state -o solar.json
+    semonitor --type 4 /dev/ttyUSB0 | tee yyyymmdd.json | se2state --state-file solar.json
 ```
 
 
@@ -554,19 +560,23 @@ Convert SolarEdge inverter performance monitoring data from JSON to CSV.
 #### Options
 
 ```text
-    -a              append to inverter and optimizer files
-    -d delim        csv file delimiter (default: ",")
-    -t              write column headers to csv files
-    -p csvPrefix    prefix for all csv filenames
-    -i invFile      deprecated - use -p instead
-    -o optFile      deprecated - use -p instead
+    -a, --append    append to inverter and optimizer files
+    -F, --delimiter delim
+                    csv file delimiter (default: ",")
+    -L, --headers   write column headers to csv files
+    -P, --prefix csvPrefix
+                    prefix for all csv filenames
+    -i invFile      deprecated - use -P instead
+    -o optFile      deprecated - use -P instead
+    -e              deprecated - use -P instead
+    -h, --help      show the help message and exit
 ```
 
 
 #### Examples
 
 ```sh
-    se2csv -p yyyymmdd -t yyyymmdd.json
+    se2csv -P yyyymmdd -L yyyymmdd.json
 ```
 
 Read from SE data file `yyyymmdd.json` and write CSV data with headers, for each
@@ -577,7 +587,7 @@ device type encountered (e.g. optimizers, inverters, batteries), to files called
 ### se2graphite
 
 Send SolarEdge performance monitoring data from JSON to a graphite pickle
-listener port, or with `-t`, to a graphite text listener port.
+listener port, or with `-e`, to a graphite text listener port.
 
 
 #### Usage
@@ -597,11 +607,15 @@ listener port, or with `-t`, to a graphite text listener port.
 #### Options
 
 ```text
-    -b base         base prefix for the names of the metrics sent to graphite
-    -H host         the host url or IP address of the graphite server (default: "localhost")
-    -p port         the port number of the graphite / carbon listener port (default: 2004, or 2003 with -t)
-    -t              send the metrics to the text listener port, one metric at a time, instead of the pickle listener port
-    -f              follow (wait for new data to be written to) the JSON inFile
+    -P, --prefix prefix
+                    prefix for the names of the metrics sent to graphite
+    -H, --host host the host url or IP address of the graphite server
+                    (default: "localhost")
+    -p, --port port the port number of the graphite / carbon listener port
+                    (default: 2004, or 2003 with -e)
+    -e, --text      send the metrics to the text listener port, one metric at
+                    a time, instead of the pickle listener port
+    -f, --follow    follow (wait for new data to be written to) the JSON inFile
     -h, --help      show the help message and exit
 ```
 
@@ -612,7 +626,7 @@ host in scripts too.
 #### Examples
 
 ```sh
-    se2graphite -b "semonitor" yyyymmdd.json
+    se2graphite -P "semonitor" yyyymmdd.json
 ```
 
 Send all numeric metric data for each device encountered in `yyyymmdd.json` to
@@ -637,7 +651,7 @@ arrives.
 In graphite / whisper all metric names will begin with "semonitor."
 
 ```sh
-    se2graphite -t -b "semonitor" yyyymmdd.json
+    se2graphite -e -P "semonitor" yyyymmdd.json
 ```
 
 Send all numeric metric data for each device encountered in `yyyymmdd.json` to
@@ -649,6 +663,81 @@ between each transmission.
 If the `-f` option had been included, `se2graphite` would follow (wait for new
 JSON lines to be written to) the inFile (`yyyymmdd.json`) until interrupted
 (Ctrl-C) or otherwise killed.
+
+
+### se2file
+
+Write the output of semonitor, unprocessed, to JSON files named after the day
+and hour in which each message was received.
+
+
+#### Usage
+
+```sh
+    se2file options [inFile]
+```
+
+
+#### Arguments
+
+```text
+    inFile          File containing performance data in JSON format (default:
+                    stdin)
+```
+
+
+#### Options
+
+```text
+    -B, --basedir baseDir
+                    base directory to put the files into (required)
+    -P, --prefix prefix
+                    prefix for all JSON filenames (default: solardata_)
+    -D, --daily     store daily files (YYYY-MM-DD) instead of hourly files
+                    (YYYY-MM-DD-hh); results in larger files
+    -l, --linger seconds
+                    close the open output files after this many seconds without
+                    new data, and wait for more data (default: 120)
+    -M, --make-daily-dir
+                    create a directory per day (YYYY-MM-DD) for the files;
+                    otherwise all files go into the base directory
+    -w, --wait      wait forever for data on stdin, e.g. for a live semonitor
+    -v, --verbose   turn on very verbose debug messages
+    -h, --help      show the help message and exit
+```
+
+
+#### Examples
+
+```sh
+    semonitor --type 4 /dev/ttyUSB0 | se2file --basedir /var/lib/semonitor -w
+```
+
+
+### se2influx
+
+Read semonitor output and write it to an InfluxDB, and optionally a log file.
+
+
+#### Usage
+
+```sh
+    se2influx [options]
+```
+
+
+#### Options
+
+```text
+    -H, --host HOST         hostname to connect to InfluxDB (default: localhost)
+    -p, --port PORT         port to connect to InfluxDB (default: 8086)
+    -u, --username USER     username to connect as (default: root)
+    -W, --password PASSWORD password of the user (default: root)
+    -h, --help              show the help message and exit
+```
+
+The other options are long only, for example `--database`, `--ssl` and
+`--queue_size`. `se2influx --help` lists all of them.
 
 
 ### se2mqtt
@@ -677,11 +766,16 @@ the JSON input is published as the state so far.
 All of these are required.
 
 ```text
-    -c clientID     Mosquitto client ID
-    -u user         Mosquitto client user ID
-    -p password     Mosquitto client password
-    -s server       Mosquitto server (DNS or IP address)
-    -t topic        Mosquitto MQTT topic to publish to
+    -j, --client-id clientID
+                    Mosquitto client ID
+    -u, --username user
+                    Mosquitto client user ID
+    -W, --password password
+                    Mosquitto client password
+    -H, --host server
+                    Mosquitto server (DNS or IP address)
+    -T, --topic topic
+                    Mosquitto MQTT topic to publish to
     -h, --help      show the help message and exit
 ```
 
@@ -689,8 +783,8 @@ All of these are required.
 #### Examples
 
 ```sh
-    semonitor -t 4 /dev/ttyUSB0 | se2mqtt -c solaredge -u solaredge \
-      -p s0lar3dg3 -s mosquitto.domain.local -t /ha/value/solaredge
+    semonitor --type 4 /dev/ttyUSB0 | se2mqtt -j solaredge -u solaredge \
+      -W s0lar3dg3 -H mosquitto.domain.local -T /ha/value/solaredge
 ```
 
 
@@ -879,22 +973,23 @@ Use `pee` to pipe `stdout` concurrently to run multiple outputs simultaneously.
 
 ```sh
 semonitor <your-semonitor-args> | pee \
-  "se2mqtt -c solaredge -u dummy -p dummy -s localhost -t /ha/value/solaredge" \
-  "se2graphite -t -H localhost -b solaredge" \
-  "se2influx --host localhost --port 8086 --database solaredge" \
-  "se2state -i <inverter-serials> -o /tmp/solar.json" \
+  "se2mqtt -j solaredge -u dummy -W dummy -H localhost -T /ha/value/solaredge" \
+  "se2graphite -e -H localhost -P solaredge" \
+  "se2influx -H localhost -p 8086 --database solaredge" \
+  "se2state -s <inverter-serials> -S /tmp/solar.json" \
   "cat"
 ```
 
 * **Live terminal output:** `"cat"` mirrors the JSON stream to your console;
   remove `"cat"` to run quietly.
 * **Dummy credentials:** Even with anonymous access enabled on Mosquitto,
-  `se2mqtt` requires all of its options, so `-u` and `-p` have to be given.
+  `se2mqtt` requires all of its options, so `-u` and `-W` have to be given.
   `se2influx` defaults to the user and password `root`.
-* **State file:** `se2state` needs `-o` to know where to keep its state, and
-  `-i` with the serial numbers of the inverters the first time, to create it.
+* **State file:** `se2state` needs `-S` to know where to keep its state, and
+  `-s` with the serial numbers of the inverters the first time, to create it.
 * **Options:** every tool answers `-h` and `--help`, and lists its options
-  there. The options are described in their sections above.
+  there. Long options start with two dashes (`--host`); each section above
+  gives the short and long form of every option.
 
 
 #### Inspect Data & Clean Up

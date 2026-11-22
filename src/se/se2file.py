@@ -144,38 +144,44 @@ def getargs(argv=None):
     )
     parser.add_argument(
         "-v",
+        "--verbose",
         dest="debug",
         action="store_true",
         default=False,
         help="turn on very verbose debug messages",
     )
     parser.add_argument(
-        "-b",
+        "-B",
+        "--basedir",
         dest="basedir",
         required=True,
         help="base directory to put the files into (required)",
     )
     parser.add_argument(
-        "-p",
+        "-P",
+        "--prefix",
         dest="prefix",
         default="solardata_",
         help="prefix for all JSON filenames",
     )
     parser.add_argument(
-        "-d",
+        "-D",
+        "--daily",
         dest="store_daily",
         default=False,
         action="store_true",
         help="Store daily files (YYYY-MM-DD) instead of hourly files (YYYY-MM-DD-hh); results in larger files.",
     )
     parser.add_argument(
-        "-t",
+        "-l",
+        "--linger",
         dest="openfilesecs",
         default="120",
         help="Close the open output files after this many seconds without new data, and wait for more data.",
     )
     parser.add_argument(
         "-w",
+        "--wait",
         dest="looper",
         default=False,
         action="store_true",
@@ -187,13 +193,14 @@ def getargs(argv=None):
         ),
     )
     parser.add_argument(
-        "-m",
+        "-M",
+        "--make-daily-dir",
         dest="make_daily_dir",
         default=False,
         action="store_true",
         help=(
             "Create a directory per day (YYYY-MM-DD) for the files; "
-            "otherwise all files go into the base directory (-b)."
+            "otherwise all files go into the base directory (-B)."
         ),
     )
     parser.add_argument(

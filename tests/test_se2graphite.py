@@ -76,7 +76,7 @@ def env(monkeypatch):
 
 
 def run_se2graphite(monkeypatch, *args, stdin=""):
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-t", *map(str, args)])
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-e", *map(str, args)])
     monkeypatch.setattr(sys, "stdin", io.StringIO(stdin))
     runpy.run_path(str(SCRIPT), run_name="__main__")
     (connection,) = FakeSocket.instances
@@ -217,7 +217,7 @@ def test_each_metric_is_one_newline_terminated_message(monkeypatch):
 def test_the_base_is_prepended_with_a_dot(monkeypatch):
     connection = run_se2graphite(
         monkeypatch,
-        "-b",
+        "-P",
         "home.solar",
         stdin=line(inverters={"I1": device(Pac=1)}),
     )
@@ -562,7 +562,7 @@ def test_connecting_to_a_dead_graphite_times_out_after_ten_seconds(monkeypatch):
 
 def test_the_base_gets_a_dot_appended(monkeypatch):
     connection = run_main(
-        monkeypatch, "-b", "home", stdin=line(inverters={"I1": device(Pac=1)})
+        monkeypatch, "-P", "home", stdin=line(inverters={"I1": device(Pac=1)})
     )
 
     assert unpack(connection.sent[0])[0][0] == "home.inverters.I1.Pac"

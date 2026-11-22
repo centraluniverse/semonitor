@@ -391,16 +391,29 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     db_args = parser.add_argument_group(description="InfluxDB options.")
     db_args.add_argument(
-        "--host", help="hostname to connect to InfluxDB", default="localhost"
+        "-H",
+        "--host",
+        help="hostname to connect to InfluxDB",
+        default="localhost",
     )
     db_args.add_argument(
-        "--port", help="port to connect to InfluxDB", default=8086, type=int
+        "-p",
+        "--port",
+        help="port to connect to InfluxDB",
+        default=8086,
+        type=int,
     )
     db_args.add_argument(
-        "--username", help="username to connect as", default="root"
+        "-u",
+        "--username",
+        help="username to connect as",
+        default="root",
     )
     db_args.add_argument(
-        "--password", help="password of the user", default="root"
+        "-W",
+        "--password",
+        help="password of the user",
+        default="root",
     )
     db_args.add_argument(
         "--database", help="database name to connect to", default="semonitor"

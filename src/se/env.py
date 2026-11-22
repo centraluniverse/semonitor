@@ -136,6 +136,7 @@ def _make_parser():
     )
     parser.add_argument(
         "-a",
+        "--append",
         dest="append",
         action="store_true",
         default=False,
@@ -143,6 +144,7 @@ def _make_parser():
     )
     parser.add_argument(
         "-b",
+        "--baudrate",
         dest="baudrate",
         type=int,
         default=115200,
@@ -150,6 +152,7 @@ def _make_parser():
     )
     parser.add_argument(
         "-c",
+        "--commands",
         dest="commands",
         type=validated_commands,
         default=[],
@@ -157,12 +160,14 @@ def _make_parser():
     )
     parser.add_argument(
         "-d",
+        "--logfile",
         dest="logfile",
         default="stderr",
         help="Where to write log messages: either a file name or one of ['stderr', 'syslog'].",
     )
     parser.add_argument(
         "-f",
+        "--follow",
         dest="follow",
         action="store_true",
         default=False,
@@ -170,6 +175,7 @@ def _make_parser():
     )
     parser.add_argument(
         "-m",
+        "--master",
         dest="master",
         action="store_true",
         default=False,
@@ -177,6 +183,7 @@ def _make_parser():
     )
     parser.add_argument(
         "-o",
+        "--outfile",
         dest="outfile",
         default="stdout",
         help=(
@@ -186,11 +193,13 @@ def _make_parser():
     )
     parser.add_argument(
         "-r",
+        "--record",
         dest="record",
         help="file to record all incoming and outgoing messages to. Supports __date__ and __datetime__.",
     )
     parser.add_argument(
         "-n",
+        "--nadir",
         dest="nadir",
         type=validated_nadir,
         default=None,
@@ -200,6 +209,7 @@ def _make_parser():
 
     parser.add_argument(
         "-s",
+        "--slave",
         dest="slaves",
         type=validated_slaves,
         default=[],
@@ -207,15 +217,22 @@ def _make_parser():
     )
     parser.add_argument(
         "-t",
+        "--type",
         dest="type",
         choices=["2", "4"],
         help="serial data source type (2=RS232, 4=RS485)",
     )
     parser.add_argument(
-        "-v", dest="verbose", action="count", default=0, help="verbose output"
+        "-v",
+        "--verbose",
+        dest="verbose",
+        action="count",
+        default=0,
+        help="verbose output",
     )
     parser.add_argument(
         "-x",
+        "--xerror",
         dest="xerror",
         action="store_true",
         default=False,

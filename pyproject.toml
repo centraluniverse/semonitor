@@ -172,3 +172,6 @@ convention = "google"
     "S301",    # suspicious-pickle-usage
     "S603",    # subprocess-without-shell-equals-true
 ]
+"tests/test_cli.py" = [
+    "SLF001", # private-member-access, env has no public parser accessor
+]

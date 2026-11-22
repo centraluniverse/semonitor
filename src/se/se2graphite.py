@@ -3,7 +3,7 @@ Send SolarEdge performance metrics to Graphite.
 
 By default the metrics are sent to the Graphite/carbon pickle listener port
 (usually 2004), which accepts batches of metrics in a pickled nested list of
-tuples format. With the -t option they are sent to the plain text listener
+tuples format. With the -e option they are sent to the plain text listener
 port (usually 2003) instead, one metric at a time.
 
 The `Metrics` class converts a nested dictionary (such as produced by
@@ -212,19 +212,22 @@ def parse_options(argv):
         description="Send SolarEdge performance data to a Graphite server.",
     )
     parser.add_argument(
-        "-b",
+        "-P",
+        "--prefix",
         dest="base",
-        metavar="BASE",
-        help="base prefix for the names of the metrics",
+        metavar="PREFIX",
+        help="prefix for the names of the metrics",
     )
     parser.add_argument(
         "-f",
+        "--follow",
         dest="following",
         action="store_true",
         help="follow (wait for new data to be written to) the JSON input file",
     )
     parser.add_argument(
         "-H",
+        "--host",
         dest="host_name",
         default="localhost",
         metavar="HOST",
@@ -235,16 +238,18 @@ def parse_options(argv):
     )
     parser.add_argument(
         "-p",
+        "--port",
         dest="port",
         type=int,
         metavar="PORT",
         help=(
             "port of the Graphite (carbon) listener "
-            "(default: 2004, or 2003 with -t)"
+            "(default: 2004, or 2003 with -e)"
         ),
     )
     parser.add_argument(
-        "-t",
+        "-e",
+        "--text",
         dest="text",
         action="store_true",
         help="send the metrics to the text listener port, one at a time",

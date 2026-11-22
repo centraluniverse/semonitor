@@ -111,11 +111,11 @@ def test_the_base_directory_is_required(getargs, capsys):
         getargs()
 
     assert exit_.value.code == 2
-    assert "-b" in capsys.readouterr().err
+    assert "-B" in capsys.readouterr().err
 
 
 def test_defaults(getargs):
-    args = getargs("-b", "out")
+    args = getargs("-B", "out")
 
     assert args.basedir == "out"
     assert args.prefix == "solardata_"
@@ -129,7 +129,7 @@ def test_defaults(getargs):
 
 def test_every_option_is_parsed(getargs):
     args = getargs(
-        "-v", "-b", "out", "-p", "pre_", "-d", "-t", "30", "-w", "-m", "in.json"
+        "-v", "-B", "out", "-P", "pre_", "-D", "-l", "30", "-w", "-M", "in.json"
     )
 
     assert args.debug is True
@@ -142,21 +142,21 @@ def test_every_option_is_parsed(getargs):
 
 
 def test_waiting_forever_on_a_file_is_refused_with_a_warning(getargs, capsys):
-    args = getargs("-b", "out", "-w", "in.json")
+    args = getargs("-B", "out", "-w", "in.json")
 
     assert "Warning" in capsys.readouterr().err
     assert args.infile == "in.json"
 
 
 def test_waiting_forever_on_stdin_gives_no_warning(getargs, capsys):
-    getargs("-b", "out", "-w")
+    getargs("-B", "out", "-w")
 
     assert capsys.readouterr().err == ""
 
 
 def test_unknown_options_are_refused(getargs):
     with pytest.raises(SystemExit) as exit_:
-        getargs("-b", "out", "--no-such-option")
+        getargs("-B", "out", "--no-such-option")
 
     assert exit_.value.code == 2
 
@@ -168,7 +168,7 @@ def test_each_line_of_a_file_is_appended_to_the_hourly_file(workdir, se2file):
     (workdir / "in.json").write_text('{"a": 1}\n{"b": 2}\n')
     (workdir / "out").mkdir()
 
-    assert se2file("-b", "out", workdir / "in.json") == 0
+    assert se2file("-B", "out", workdir / "in.json") == 0
 
     assert (workdir / "out" / "solardata_2016-01-01-12.json").read_text() == (
         '{"a": 1}\n{"b": 2}\n'
@@ -179,7 +179,7 @@ def test_lines_are_stripped_and_blank_lines_are_not_stored(workdir, se2file):
     (workdir / "in.json").write_text('  {"a": 1}  \r\n\n   \n{"b": 2}\n')
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", workdir / "in.json")
+    se2file("-B", "out", workdir / "in.json")
 
     assert (workdir / "out" / "solardata_2016-01-01-12.json").read_text() == (
         '{"a": 1}\n{"b": 2}\n'
@@ -189,7 +189,7 @@ def test_lines_are_stripped_and_blank_lines_are_not_stored(workdir, se2file):
 def test_stdin_is_the_default_input(workdir, se2file):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", stdin=['{"a": 1}\n'])
 
     assert (
         workdir / "out" / "solardata_2016-01-01-12.json"
@@ -201,7 +201,7 @@ def test_existing_files_are_extended_and_not_overwritten(workdir, se2file):
     existing = workdir / "out" / "solardata_2016-01-01-12.json"
     existing.write_text('{"old": 0}\n')
 
-    se2file("-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", stdin=['{"a": 1}\n'])
 
     assert existing.read_text() == '{"old": 0}\n{"a": 1}\n'
 
@@ -209,7 +209,7 @@ def test_existing_files_are_extended_and_not_overwritten(workdir, se2file):
 def test_the_prefix_is_used_in_the_file_name(workdir, se2file):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", "-p", "site-", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", "-P", "site-", stdin=['{"a": 1}\n'])
 
     assert (workdir / "out" / "site-2016-01-01-12.json").is_file()
 
@@ -219,7 +219,7 @@ def test_daily_files_have_the_day_but_not_the_hour_in_their_name(
 ):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", "-d", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", "-D", stdin=['{"a": 1}\n'])
 
     assert [path.name for path in (workdir / "out").iterdir()] == [
         "solardata_2016-01-01.json"
@@ -230,7 +230,7 @@ def test_a_new_hour_starts_a_new_file(workdir, se2file):
     (workdir / "out").mkdir()
 
     se2file(
-        "-b",
+        "-B",
         "out",
         stdin=[
             '{"a": 1}\n',
@@ -249,9 +249,9 @@ def test_a_new_hour_does_not_start_a_new_daily_file(workdir, se2file):
     (workdir / "out").mkdir()
 
     se2file(
-        "-b",
+        "-B",
         "out",
-        "-d",
+        "-D",
         stdin=['{"a": 1}\n', dt.timedelta(hours=1), '{"b": 2}\n'],
     )
 
@@ -263,9 +263,9 @@ def test_a_new_day_starts_a_new_daily_file(workdir, se2file):
     (workdir / "out").mkdir()
 
     se2file(
-        "-b",
+        "-B",
         "out",
-        "-d",
+        "-D",
         stdin=['{"a": 1}\n', dt.timedelta(days=1), '{"b": 2}\n'],
     )
 
@@ -279,9 +279,9 @@ def test_a_directory_per_day_is_made_on_request(workdir, se2file):
     (workdir / "out").mkdir()
 
     se2file(
-        "-b",
+        "-B",
         "out",
-        "-m",
+        "-M",
         stdin=['{"a": 1}\n', dt.timedelta(days=1), '{"b": 2}\n'],
     )
 
@@ -296,7 +296,7 @@ def test_a_directory_per_day_is_made_on_request(workdir, se2file):
 def test_a_directory_per_day_that_exists_is_used(workdir, se2file):
     (workdir / "out" / "2016-01-01").mkdir(parents=True)
 
-    se2file("-b", "out", "-m", "-d", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", "-M", "-D", stdin=['{"a": 1}\n'])
 
     assert (
         workdir / "out" / "2016-01-01" / "solardata_2016-01-01.json"
@@ -315,7 +315,7 @@ def test_the_output_files_are_not_left_open(workdir, se2file, monkeypatch):
 
     monkeypatch.setattr("io.open", tracking_open)
 
-    se2file("-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", stdin=['{"a": 1}\n'])
 
     assert opened
     assert all(handle.closed for handle in opened)
@@ -330,7 +330,7 @@ def test_a_file_is_processed_once_and_then_the_script_ends(
     (workdir / "in.json").write_text('{"a": 1}\n')
     (workdir / "out").mkdir()
 
-    assert se2file("-b", "out", workdir / "in.json") == 0
+    assert se2file("-B", "out", workdir / "in.json") == 0
 
     # After the end of the file, only a limited time is spent waiting for more.
     assert 0 < len(clock.sleeps) <= 20
@@ -343,7 +343,7 @@ def test_waiting_forever_on_stdin_goes_on_after_many_blank_lines(
 
     with pytest.raises(InputExhausted):
         se2file(
-            "-b",
+            "-B",
             "out",
             "-w",
             stdin=[""] * 50 + ['{"late": 1}\n'],
@@ -360,7 +360,7 @@ def test_stdin_without_waiting_forever_ends_after_a_few_blank_lines(
 ):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", stdin=[""] * 50 + ['{"late": 1}\n'])
+    se2file("-B", "out", stdin=[""] * 50 + ['{"late": 1}\n'])
 
     assert list((workdir / "out").iterdir()) == []
 
@@ -369,7 +369,7 @@ def test_a_blank_line_count_is_reset_by_data(workdir, se2file):
     (workdir / "out").mkdir()
     items = ([""] * 8 + ['{"a": 1}\n']) * 3
 
-    se2file("-b", "out", stdin=items)
+    se2file("-B", "out", stdin=items)
 
     assert (workdir / "out" / "solardata_2016-01-01-12.json").read_text().count(
         "\n"
@@ -379,7 +379,7 @@ def test_a_blank_line_count_is_reset_by_data(workdir, se2file):
 def test_the_script_waits_between_blank_reads(se2file, workdir, clock):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", stdin=[""] * 3)
+    se2file("-B", "out", stdin=[""] * 3)
 
     assert clock.sleeps
     assert all(seconds > 0 for seconds in clock.sleeps)
@@ -393,14 +393,14 @@ def test_a_file_that_cannot_be_opened_is_reported_and_ends_with_one(
 ):
     (workdir / "out").mkdir()
 
-    assert se2file("-b", "out", "missing.json") == 1
+    assert se2file("-B", "out", "missing.json") == 1
 
     assert "missing.json" in capsys.readouterr().err
 
 
 def test_a_missing_base_directory_is_an_error_not_silently_ignored(se2file):
     with pytest.raises(OSError, match="does-not-exist"):
-        se2file("-b", "does-not-exist", stdin=['{"a": 1}\n'])
+        se2file("-B", "does-not-exist", stdin=['{"a": 1}\n'])
 
 
 # --- debug -------------------------------------------------------------------
@@ -409,7 +409,7 @@ def test_a_missing_base_directory_is_an_error_not_silently_ignored(se2file):
 def test_debug_shows_the_data_that_is_received(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
-    se2file("-v", "-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-v", "-B", "out", stdin=['{"a": 1}\n'])
 
     assert 'Got some data: {"a": 1}' in capsys.readouterr().err
 
@@ -417,7 +417,7 @@ def test_debug_shows_the_data_that_is_received(workdir, se2file, capsys):
 def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
-    se2file("-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-B", "out", stdin=['{"a": 1}\n'])
 
     assert capsys.readouterr().out == ""
 
@@ -425,7 +425,7 @@ def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
 def test_debug_shows_a_new_file_name(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
-    se2file("-v", "-b", "out", stdin=['{"a": 1}\n'])
+    se2file("-v", "-B", "out", stdin=['{"a": 1}\n'])
 
     assert "solardata_2016-01-01-12.json" in capsys.readouterr().err
 
@@ -437,7 +437,7 @@ def test_debug_reports_the_loop_count_with_a_readable_time(
 
     with pytest.raises(InputExhausted):
         se2file(
-            "-v", "-b", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True
+            "-v", "-B", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True
         )
 
     out = capsys.readouterr().err
@@ -452,7 +452,7 @@ def test_debug_says_when_an_output_file_is_closed_after_no_data(
 
     se2file(
         "-v",
-        "-b",
+        "-B",
         "out",
         stdin=['{"a": 1}\n', dt.timedelta(hours=1), ""],
     )
@@ -464,6 +464,6 @@ def test_without_debug_the_loop_count_is_not_reported(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
     with pytest.raises(InputExhausted):
-        se2file("-b", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True)
+        se2file("-B", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True)
 
     assert "looped" not in capsys.readouterr().err
