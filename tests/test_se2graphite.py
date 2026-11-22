@@ -152,20 +152,34 @@ def test_connects_to_the_graphite_plaintext_port_on_localhost_by_default(
 
 def test_text_host_and_port_can_be_changed(monkeypatch):
     connection = run_se2graphite(
-        monkeypatch, "-h", "graphite.lan", "-p", "2203"
+        monkeypatch, "-H", "graphite.lan", "-p", "2203"
     )
 
     assert connection.address == ("graphite.lan", 2203)
 
 
-def test_a_non_numeric_port_is_an_error(monkeypatch):
-    with pytest.raises(ValueError, match="plaintext"):
+def test_a_non_numeric_port_is_an_error(monkeypatch, capsys):
+    with pytest.raises(SystemExit) as exit_:
         run_se2graphite(monkeypatch, "-p", "plaintext")
 
+    assert exit_.value.code == 2
+    assert "plaintext" in capsys.readouterr().err
 
-def test_unknown_options_are_an_error(monkeypatch):
-    with pytest.raises(Exception, match="-z"):
+
+def test_unknown_options_are_an_error(monkeypatch, capsys):
+    with pytest.raises(SystemExit) as exit_:
         run_se2graphite(monkeypatch, "-z")
+
+    assert exit_.value.code == 2
+    assert "-z" in capsys.readouterr().err
+
+
+def test_the_host_option_is_capital_h_because_h_is_help(monkeypatch, capsys):
+    with pytest.raises(SystemExit) as exit_:
+        run_se2graphite(monkeypatch, "-h", "graphite.lan")
+
+    assert exit_.value.code == 0
+    assert "-H HOST" in capsys.readouterr().out
 
 
 def test_connecting_to_a_dead_graphite_times_out_after_ten_seconds_in_text(
@@ -535,7 +549,7 @@ def test_defaults_are_localhost_and_the_carbon_pickle_port(monkeypatch):
 
 
 def test_pickle_host_and_port_can_be_changed(monkeypatch):
-    connection = run_main(monkeypatch, "-h", "carbon.lan", "-p", "12004")
+    connection = run_main(monkeypatch, "-H", "carbon.lan", "-p", "12004")
 
     assert connection.address == ("carbon.lan", 12004)
 

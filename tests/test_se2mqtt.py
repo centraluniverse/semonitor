@@ -245,13 +245,13 @@ def test_invalid_json_is_an_error(monkeypatch):
 
 
 # Without -t (or the others) there is nowhere to publish to. This has to be
-# reported, and not end in a NameError after the first message was read.
-@pytest.mark.xfail(strict=True, reason="Issue #22")
-def test_the_options_are_all_required_to_publish(monkeypatch):
+# reported as a usage error before any message is read.
+def test_the_options_are_all_required_to_publish(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-c", "client"])
     monkeypatch.setattr(sys, "stdin", Input([line({"I1": inverter()})]))
 
     with pytest.raises(SystemExit) as exit_:
         runpy.run_path(str(SCRIPT), run_name="__main__")
 
-    assert exit_.value.code not in (0, None)
+    assert exit_.value.code == 2
+    assert "-u" in capsys.readouterr().err

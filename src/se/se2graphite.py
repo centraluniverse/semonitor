@@ -23,8 +23,8 @@ batch of metrics to a new "test" base, which meant Graphite / carbon had to
 create a whole lot of new whisper files all at once.
 """
 
+import argparse
 import dataclasses
-import getopt
 import json
 import math
 import pickle
@@ -202,25 +202,67 @@ def parse_options(argv):
     defaults are 2004 for the pickle and 2003 for the text protocol.
 
     Args:
-        argv: The command line arguments, without the name of the program.
+        argv: The command line arguments, without the name of the program, or
+            None for those of the process.
 
     Returns:
         The Options, with the default port of the protocol if none was given.
     """
+    parser = argparse.ArgumentParser(
+        description="Send SolarEdge performance data to a Graphite server.",
+    )
+    parser.add_argument(
+        "-b",
+        dest="base",
+        metavar="BASE",
+        help="base prefix for the names of the metrics",
+    )
+    parser.add_argument(
+        "-f",
+        dest="following",
+        action="store_true",
+        help="follow (wait for new data to be written to) the JSON input file",
+    )
+    parser.add_argument(
+        "-H",
+        dest="host_name",
+        default="localhost",
+        metavar="HOST",
+        help=(
+            "host name or IP address of the Graphite server "
+            "(default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "-p",
+        dest="port",
+        type=int,
+        metavar="PORT",
+        help=(
+            "port of the Graphite (carbon) listener "
+            "(default: 2004, or 2003 with -t)"
+        ),
+    )
+    parser.add_argument(
+        "-t",
+        dest="text",
+        action="store_true",
+        help="send the metrics to the text listener port, one at a time",
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        help="file containing performance data in JSON format (default: stdin)",
+    )
+    args = parser.parse_args(argv)
+
     options = Options()
-    (opts, args) = getopt.getopt(argv, "b:fh:p:t")
-    options.in_file = open_input(args)
-    for opt in opts:
-        if opt[0] == "-b":
-            options.base = opt[1] + "."
-        if opt[0] == "-h":
-            options.host_name = opt[1]
-        if opt[0] == "-p":
-            options.port = int(opt[1])
-        if opt[0] == "-f":
-            options.following = True
-        if opt[0] == "-t":
-            options.text = True
+    options.base = "" if args.base is None else args.base + "."
+    options.host_name = args.host_name
+    options.following = args.following
+    options.text = args.text
+    options.in_file = open_input([] if args.infile is None else [args.infile])
+    options.port = args.port
     if options.port is None:
         options.port = 2003 if options.text else 2004
     return options

@@ -153,15 +153,15 @@ def test_without_initializing_a_missing_state_is_started_empty(
     assert read_state(workdir / "state.json")["inverters"]["I1"] == inverter()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #23")
-def test_the_output_file_is_required(monkeypatch):
+def test_the_output_file_is_required(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), "-i", "I1"])
     monkeypatch.setattr(sys, "stdin", Input([]))
 
     with pytest.raises(SystemExit) as exit_:
         runpy.run_path(str(SCRIPT), run_name="__main__")
 
-    assert exit_.value.code not in (0, None)
+    assert exit_.value.code == 2
+    assert "-o" in capsys.readouterr().err
 
 
 # --- updating the state ------------------------------------------------------

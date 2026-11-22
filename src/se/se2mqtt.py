@@ -25,7 +25,7 @@ Example:
             -s mosquitto.domain.local -t /ha/value/solaredge
 """
 
-import getopt
+import argparse
 import json
 import sys
 import time
@@ -33,6 +33,49 @@ import time
 import paho.mqtt.client as mqtt
 
 from se.metrics import open_input
+
+
+def parse_args(argv):
+    """
+    Parse the command line arguments.
+
+    Args:
+        argv: The command line arguments, without the name of the program, or
+            None for those of the process.
+
+    Returns:
+        The parsed arguments, with the input file in infile (None for stdin).
+    """
+    parser = argparse.ArgumentParser(
+        description="Publish SolarEdge performance data to a Mosquitto broker.",
+    )
+    parser.add_argument(
+        "-c", dest="clientid", required=True, help="Mosquitto client ID"
+    )
+    parser.add_argument(
+        "-u", dest="user", required=True, help="Mosquitto client user ID"
+    )
+    parser.add_argument(
+        "-p", dest="passwd", required=True, help="Mosquitto client password"
+    )
+    parser.add_argument(
+        "-s",
+        dest="server",
+        required=True,
+        help="Mosquitto server (DNS or IP address)",
+    )
+    parser.add_argument(
+        "-t",
+        dest="topic",
+        required=True,
+        help="Mosquitto MQTT topic to publish to",
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        help="file containing performance data in JSON format (default: stdin)",
+    )
+    return parser.parse_args(argv)
 
 
 def update_state(state_dict, in_dict):
@@ -62,21 +105,8 @@ def main(argv=None):
     state_dict = {"inverters": {}, "optimizers": {}}
 
     # get program arguments and options
-    (opts, args) = getopt.getopt(
-        sys.argv[1:] if argv is None else argv, "c:u:p:s:t:"
-    )
-    in_file = open_input(args)
-    for opt in opts:
-        if opt[0] == "-c":
-            clientid = opt[1]
-        if opt[0] == "-u":
-            user = opt[1]
-        if opt[0] == "-p":
-            passwd = opt[1]
-        if opt[0] == "-s":
-            server = opt[1]
-        if opt[0] == "-t":
-            topic = opt[1]
+    args = parse_args(argv)
+    in_file = open_input([] if args.infile is None else [args.infile])
 
     # read the input forever
     with in_file:
@@ -90,10 +120,10 @@ def main(argv=None):
             update_state(state_dict, in_dict)
             # send to MQTT
             try:
-                mqttc = mqtt.Client(client_id=clientid)
-                mqttc.username_pw_set(user, passwd)
-                mqttc.connect(server)
-                mqttc.publish(topic, json.dumps(state_dict))
+                mqttc = mqtt.Client(client_id=args.clientid)
+                mqttc.username_pw_set(args.user, args.passwd)
+                mqttc.connect(args.server)
+                mqttc.publish(args.topic, json.dumps(state_dict))
                 mqttc.disconnect()
             except (OSError, ValueError) as ex:
                 sys.stderr.write(f"MQTT Exception: {ex}\n")

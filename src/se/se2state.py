@@ -4,13 +4,67 @@ Maintain a file containing the current state and selected statistics.
 The state covers SolarEdge inverters and optimizers.
 """
 
-import getopt
+import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 from se.metrics import open_input
+
+
+def inverter_list(value):
+    """
+    Split a comma separated list of inverter IDs.
+
+    Args:
+        value: The command line value, such as "7F104920,7F104921".
+
+    Returns:
+        The list of inverter IDs.
+    """
+    return value.split(",")
+
+
+def parse_args(argv):
+    """
+    Parse the command line arguments.
+
+    Args:
+        argv: The command line arguments, without the name of the program, or
+            None for those of the process.
+
+    Returns:
+        The parsed arguments, with the input file in infile (None for stdin).
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Maintain a JSON file with the current state of SolarEdge "
+            "inverters and optimizers."
+        ),
+    )
+    parser.add_argument(
+        "-i",
+        dest="inverters",
+        type=inverter_list,
+        metavar="INVERTER[,INVERTER...]",
+        help=(
+            "initialize the state file with these inverter IDs, rather than "
+            "using an existing one"
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        dest="out_file_name",
+        required=True,
+        metavar="STATEFILE",
+        help="state file, overwritten every time that new data is read",
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        help="file containing performance data in JSON format (default: stdin)",
+    )
+    return parser.parse_args(argv)
 
 
 def sum_items(item_dict, item_attr):
@@ -149,22 +203,15 @@ def main(argv=None):
         argv: The command line arguments, without the program name. The
             arguments of the process are used when this is None.
     """
-    initialize = False
-
     # get program arguments and options
-    (opts, args) = getopt.getopt(sys.argv[1:] if argv is None else argv, "i:o:")
-    in_file = open_input(args)
-    for opt in opts:
-        if opt[0] == "-i":
-            initialize = True
-            inverters = opt[1].split(",")
-        if opt[0] == "-o":
-            out_file_name = opt[1]
+    args = parse_args(argv)
+    in_file = open_input([] if args.infile is None else [args.infile])
+    out_file_name = args.out_file_name
 
     # initialize the state dictionary
-    if initialize:
+    if args.inverters is not None:
         # zero the statistics
-        state_dict = initial_state(inverters)
+        state_dict = initial_state(args.inverters)
         write_state(state_dict, out_file_name)
     else:
         # start with values from the file if it exists

@@ -1,5 +1,6 @@
 """Print selected data from a JSON file."""
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -37,9 +38,17 @@ def main(argv=None):
         argv: The command line arguments, without the program name. The
             arguments of the process are used when this is None.
     """
-    args = sys.argv[1:] if argv is None else argv
+    parser = argparse.ArgumentParser(
+        description="Print selected data from a JSON file.",
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        help="file containing performance data in JSON format (default: stdin)",
+    )
     # get program arguments and options
-    in_file = open_input(args)
+    args = parser.parse_args(argv)
+    in_file = open_input([] if args.infile is None else [args.infile])
 
     # read the input
     with in_file:

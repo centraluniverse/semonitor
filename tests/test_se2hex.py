@@ -147,11 +147,11 @@ def test_without_a_data_file_the_binary_data_goes_to_stdout(
 # --- errors ------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #31")
-def test_a_log_file_has_to_be_given(monkeypatch):
+def test_a_log_file_has_to_be_given(monkeypatch, capsys):
     code, _ = run_se2hex(monkeypatch)
 
-    assert code not in (0, None)
+    assert code == 2
+    assert "logfile" in capsys.readouterr().err
 
 
 def test_a_log_file_that_does_not_exist_is_an_error(workdir, monkeypatch):

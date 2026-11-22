@@ -482,6 +482,7 @@ optimizers.
     -o stateFile    File containing the current (last read) data values for each
                     inverter and optimizer values from the input file. It will
                     be overwritten every time that new data is read.
+    -h, --help      show the help message and exit
 ```
 
 
@@ -513,6 +514,13 @@ Print a subset of data from a file containing JSON performance data.
 ```text
     inFile          File containing JSON performance data from
                     an inverter output from semonitor. (default: stdin)
+```
+
+
+#### Options
+
+```text
+    -h, --help      show the help message and exit
 ```
 
 
@@ -590,11 +598,15 @@ listener port, or with `-t`, to a graphite text listener port.
 
 ```text
     -b base         base prefix for the names of the metrics sent to graphite
-    -h host         the host url or IP address of the graphite server (default: "localhost")
+    -H host         the host url or IP address of the graphite server (default: "localhost")
     -p port         the port number of the graphite / carbon listener port (default: 2004, or 2003 with -t)
     -t              send the metrics to the text listener port, one metric at a time, instead of the pickle listener port
     -f              follow (wait for new data to be written to) the JSON inFile
+    -h, --help      show the help message and exit
 ```
+
+Older versions took the host with `-h`. `-h` is now help, so use `-H` for the
+host in scripts too.
 
 
 #### Examples
@@ -637,6 +649,85 @@ between each transmission.
 If the `-f` option had been included, `se2graphite` would follow (wait for new
 JSON lines to be written to) the inFile (`yyyymmdd.json`) until interrupted
 (Ctrl-C) or otherwise killed.
+
+
+### se2mqtt
+
+Publish SolarEdge performance data to a Mosquitto MQTT broker. Every line of
+the JSON input is published as the state so far.
+
+
+#### Usage
+
+```sh
+    se2mqtt options [inFile]
+```
+
+
+#### Arguments
+
+```text
+    inFile          File containing performance data in JSON format. (default:
+                    stdin)
+```
+
+
+#### Options
+
+All of these are required.
+
+```text
+    -c clientID     Mosquitto client ID
+    -u user         Mosquitto client user ID
+    -p password     Mosquitto client password
+    -s server       Mosquitto server (DNS or IP address)
+    -t topic        Mosquitto MQTT topic to publish to
+    -h, --help      show the help message and exit
+```
+
+
+#### Examples
+
+```sh
+    semonitor -t 4 /dev/ttyUSB0 | se2mqtt -c solaredge -u solaredge \
+      -p s0lar3dg3 -s mosquitto.domain.local -t /ha/value/solaredge
+```
+
+
+### se2hex
+
+Convert a debug log made by `semonitor` with the `-vvvv` option back into the
+binary data it logged.
+
+
+#### Usage
+
+```sh
+    se2hex logFile [dataFile]
+```
+
+
+#### Arguments
+
+```text
+    logFile         file containing semonitor debug output created with the
+                    -vvvv option
+    dataFile        file to write the binary data to (default: stdout)
+```
+
+
+#### Options
+
+```text
+    -h, --help      show the help message and exit
+```
+
+
+#### Examples
+
+```sh
+    se2hex debug.log data.bin
+```
 
 
 ## Development
@@ -789,7 +880,7 @@ Use `pee` to pipe `stdout` concurrently to run multiple outputs simultaneously.
 ```sh
 semonitor <your-semonitor-args> | pee \
   "se2mqtt -c solaredge -u dummy -p dummy -s localhost -t /ha/value/solaredge" \
-  "se2graphite -t -h localhost -b solaredge" \
+  "se2graphite -t -H localhost -b solaredge" \
   "se2influx --host localhost --port 8086 --database solaredge" \
   "se2state -i <inverter-serials> -o /tmp/solar.json" \
   "cat"
@@ -802,9 +893,8 @@ semonitor <your-semonitor-args> | pee \
   `se2influx` defaults to the user and password `root`.
 * **State file:** `se2state` needs `-o` to know where to keep its state, and
   `-i` with the serial numbers of the inverters the first time, to create it.
-* **Options:** only `se2influx` has `--help`. The others use plain options,
-  which are described in their sections above, or for `se2mqtt` at the top of
-  its source.
+* **Options:** every tool answers `-h` and `--help`, and lists its options
+  there. The options are described in their sections above.
 
 
 #### Inspect Data & Clean Up

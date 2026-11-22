@@ -11,6 +11,7 @@ Usage:
       dataFile    file to write data to (default: stdout)
 """
 
+import argparse
 import binascii
 import contextlib
 import sys
@@ -19,13 +20,26 @@ from pathlib import Path
 
 def main(argv=None):
     """Write the data lines of a debug log to a binary file or stdout."""
-    args = sys.argv[1:] if argv is None else argv
+    parser = argparse.ArgumentParser(
+        description="Convert a semonitor debug log back into a binary file.",
+    )
+    parser.add_argument(
+        "logfile",
+        help="file containing semonitor debug output created with -vvvv",
+    )
+    parser.add_argument(
+        "datafile",
+        nargs="?",
+        help="file to write the data to (default: stdout)",
+    )
+    args = parser.parse_args(argv)
     with contextlib.ExitStack() as files:
-        log_file = files.enter_context(Path(args[0]).open())
-        try:
-            data_file = files.enter_context(Path(args[1]).open("wb"))
-        except IndexError:
-            data_file = sys.stdout.buffer
+        log_file = files.enter_context(Path(args.logfile).open())
+        data_file = (
+            sys.stdout.buffer
+            if args.datafile is None
+            else files.enter_context(Path(args.datafile).open("wb"))
+        )
 
         for line in log_file:
             if line[0:5] == "data:":
