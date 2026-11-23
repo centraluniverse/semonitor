@@ -396,7 +396,6 @@ def test_functions_without_argument_decode_to_nothing():
         assert se.data.parse_data(function, b"") == ""
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #13")
 @pytest.mark.parametrize("function", NO_ARGUMENT_FUNCTIONS)
 def test_functions_without_argument_hex_dump_a_payload_anyway(function):
     assert se.data.parse_data(function, b"\x0a\xff") == "0aff"
@@ -873,7 +872,6 @@ def test_format_date_time_of_an_invalid_stamp_is_invalid(stamp, caplog):
     assert caplog.messages[0].startswith(f"Invalid timestamp: {stamp} ")
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #38")
 def test_format_date_time_of_an_out_of_range_stamp_is_the_hex_bytes(
     monkeypatch,
 ):
