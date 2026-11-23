@@ -613,7 +613,6 @@ def test_a_port_that_is_not_listed_is_not_a_serial_device(usage_error):
     assert message == f"/dev/ttyUSB0{NOT_SERIAL}{ONLY_SERIAL}\n"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #12")
 def test_rs232_mode_is_not_passive(get_args, serial_port):
     _args, mode = get_args("-t", "2", serial_port)
 

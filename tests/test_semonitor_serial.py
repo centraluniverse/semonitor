@@ -290,7 +290,7 @@ def recording(golden):
 # RS232 is always active, which is checked at the end of each run.
 TTY_TYPES = [
     "4",
-    pytest.param("2", marks=pytest.mark.xfail(strict=True, reason="Issue #12")),
+    "2",
 ]
 
 
@@ -453,7 +453,6 @@ def test_a_damaged_frame_is_lost_and_the_rest_is_converted(
     assert run.received() == stream
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #12")
 @pytest.mark.parametrize(("fault", "errors"), FIELD_FAULTS)
 def test_a_damaged_frame_is_lost_and_the_rest_is_converted_on_rs232(
     serial_run, recording, fault, errors
@@ -540,9 +539,7 @@ def with_the_magic_in_the_data(recording):
         pytest.param(
             "4", marks=pytest.mark.xfail(strict=True, reason="Issue #60")
         ),
-        pytest.param(
-            "2", marks=pytest.mark.xfail(strict=True, reason="Issue #12")
-        ),
+        "2",
     ],
 )
 def test_a_frame_with_the_magic_in_its_data_is_one_frame(

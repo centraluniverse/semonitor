@@ -68,6 +68,8 @@ words:
   - wireshark
   # tools and distribution packaging
   - addopts
+  - adduser
+  - applymarker
   - codespell
   - containerfile
   - datetimez

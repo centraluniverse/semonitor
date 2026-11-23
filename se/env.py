@@ -291,7 +291,7 @@ def _validate_mode(parser, args):
                 "At least one slave address must be specified for master mode"
             )
     else:
-        passive_mode = True
+        passive_mode = args.type != "2"
 
     # command mode validation
     if args.commands:
