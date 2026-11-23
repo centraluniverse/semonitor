@@ -257,7 +257,7 @@ def _validate_serial(parser, args, *, serial_device):
     """Validate the device type against the serial device."""
     # NB The mode of an RS232 device is not made active here, see Issue #12
     if serial_device:
-        args.following = True
+        args.follow = True
         if args.type not in ["2", "4"]:
             parser.error(
                 "Input device type 2 or 4 must be specified for serial device"
