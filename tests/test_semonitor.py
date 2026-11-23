@@ -272,6 +272,8 @@ def fake_time(now=FROZEN_TIME, sleep=None):
         time=lambda: now,
         localtime=lambda: time.localtime(now),
         gmtime=lambda: time.gmtime(now),
+        mktime=time.mktime,
+        strptime=time.strptime,
         sleep=sleep or (lambda _seconds: None),
     )
 
@@ -518,6 +520,124 @@ def test_time_reply_has_the_offset_of_the_zone(
         dest=SLAVE,
     )
     assert bytes(files.line.written) == MAGIC + reply
+
+
+# --- process_msg: inverter time ---------------------------------------------
+
+# the recording with the performance data of an inverter, see the test below
+INVERTER_RECORDING = "oliv3r-20180218"
+
+
+def inverter_time(stamp):
+    (date, clock) = stamp.split(" ")
+    return {
+        "inverters": {"73124CBA": {"Date": date, "Time": clock}},
+        "optimizers": {},
+    }
+
+
+@pytest.mark.parametrize(
+    ("ahead", "word"),
+    [
+        pytest.param(301, "ahead of", id="ahead"),
+        pytest.param(-301, "behind", id="behind"),
+    ],
+)
+def test_time_request_warns_when_the_clock_is_out_of_sync(
+    sm, files, monkeypatch, caplog, ahead, word
+):
+    stamp = "2026-11-23 12:00:00"
+    now = time.mktime((2026, 11, 23, 12, 0, 0, 0, 0, -1)) + ahead
+    monkeypatch.setattr(sm, "time", fake_time(now))
+    sm.get_inverter_time(inverter_time(stamp))
+
+    with caplog.at_level(logging.WARNING):
+        process(sm, frame(GET_GMT, seq=5), files)
+
+    assert caplog.record_tuples == [
+        (
+            "semonitor_under_test",
+            logging.WARNING,
+            f"our clock is 301 seconds {word} the inverter's, check the system time",
+        )
+    ]
+    # the time is still answered
+    assert bytes(files.line.written).startswith(MAGIC)
+
+
+@pytest.mark.parametrize("ahead", [300, -300])
+def test_time_request_does_not_warn_within_the_tolerance(
+    sm, files, monkeypatch, caplog, ahead
+):
+    stamp = "2026-11-23 12:00:00"
+    now = time.mktime((2026, 11, 23, 12, 0, 0, 0, 0, -1)) + ahead
+    monkeypatch.setattr(sm, "time", fake_time(now))
+    sm.get_inverter_time(inverter_time(stamp))
+
+    with caplog.at_level(logging.WARNING):
+        process(sm, frame(GET_GMT, seq=5), files)
+
+    assert not caplog.records
+
+
+def test_time_request_does_not_warn_before_the_inverter_time_is_known(
+    sm, files, monkeypatch, caplog
+):
+    monkeypatch.setattr(sm, "time", fake_time(FROZEN_TIME))
+
+    with caplog.at_level(logging.WARNING):
+        process(sm, frame(GET_GMT, seq=5), files)
+
+    assert not caplog.records
+
+
+def test_invalid_inverter_time_is_not_compared(sm, monkeypatch, caplog):
+    monkeypatch.setattr(sm, "time", fake_time(FROZEN_TIME))
+    sm.get_inverter_time(
+        {
+            "inverters": {"73124CBA": {"Date": "invalid", "Time": "invalid"}},
+            "optimizers": {},
+        }
+    )
+
+    assert sm.inverter_skew["seconds"] is None
+    with caplog.at_level(logging.WARNING):
+        sm.check_time_skew()
+
+    assert not caplog.records
+
+
+def has_inverter_time(msg):
+    data = se.data.parse_data(POST_DATA, se.msg.parse_msg(msg)[4])
+    return any(
+        rec.get("Date") != "invalid" for rec in data["inverters"].values()
+    )
+
+
+def test_performance_data_of_the_inverter_sets_the_time_it_is_checked_against(
+    sm, files, monkeypatch, caplog
+):
+    req = next(
+        msg
+        for msg in recorded_messages(INVERTER_RECORDING)
+        if function_of(msg) == POST_DATA
+        and carries_data(msg)
+        and has_inverter_time(msg)
+    )
+    monkeypatch.setattr(sm, "time", fake_time(FROZEN_TIME))
+
+    with caplog.at_level(logging.WARNING):
+        process(sm, req, files)
+        process(sm, frame(GET_GMT, seq=5), files)
+
+    skew = sm.inverter_skew["seconds"]
+    assert skew is not None
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+        (
+            logging.WARNING,
+            f"our clock is {abs(int(skew))} seconds ahead of the inverter's, check the system time",
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1235,3 +1355,15 @@ def test_master_mode_answers_the_traffic_of_a_real_master(
     for text in expected:
         assert text in result.stderr
     assert line.closed
+
+
+def test_records_without_a_date_or_time_do_not_set_the_skew(sm, monkeypatch):
+    monkeypatch.setattr(sm, "time", fake_time(FROZEN_TIME))
+    sm.get_inverter_time(
+        {
+            "inverters": {"73124CBA": {"Date": "2016-01-01"}},
+            "optimizers": {"ABC": "not a record"},
+        }
+    )
+
+    assert sm.inverter_skew["seconds"] is None
