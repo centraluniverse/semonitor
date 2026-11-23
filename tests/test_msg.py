@@ -36,6 +36,21 @@ def corrupt(msg, index, mask):
     return bytes(broken)
 
 
+def too_big(msg):
+    (data_len,) = struct.unpack("<H", msg[:2])
+    return (
+        f"Data length {data_len} is too big for a message of {len(msg)} bytes"
+    )
+
+
+def inverse_mismatch(msg):
+    (data_len, inverse) = struct.unpack("<HH", msg[:4])
+    return (
+        f"Data length 0x{data_len:04x} doesn't match inverse length "
+        f"0x{inverse:04x}, expected 0x{~data_len & 0xFFFF:04x}"
+    )
+
+
 def run_mode(*, passive, serial_type=None, following=False):
     return se.env.RunMode(
         serial_device=True,
@@ -170,29 +185,29 @@ def test_validate_msg_rejects_a_message_that_is_too_short(caplog, length):
 
     assert se.msg.validate_msg(msg) == NOTHING
 
-    assert messages(caplog, logging.ERROR) == ["Message too short"]
+    needed = se.msg.MSG_HDR_LEN + se.msg.CHECKSUM_LEN
+    too_short = f"Message of {length} bytes is too short, at least {needed}"
+    assert messages(caplog, logging.ERROR) == [f"{too_short} bytes needed"]
     assert messages(caplog, DATA_LEVEL) == list(se.logutils.format_data(msg))
 
 
 @pytest.mark.parametrize(
     ("msg", "error"),
     [
-        pytest.param(
-            GOOD[:-1], "Data length is too big for the message", id="too-big"
-        ),
+        pytest.param(GOOD[:-1], too_big(GOOD[:-1]), id="too-big"),
         pytest.param(
             corrupt(GOOD, 0, 0x10),
-            "Data length is too big for the message",
+            too_big(corrupt(GOOD, 0, 0x10)),
             id="length-too-big",
         ),
         pytest.param(
             corrupt(GOOD, 2, 0x01),
-            "Data length doesn't match inverse length",
+            inverse_mismatch(corrupt(GOOD, 2, 0x01)),
             id="inverse-low-byte",
         ),
         pytest.param(
             corrupt(GOOD, 3, 0x80),
-            "Data length doesn't match inverse length",
+            inverse_mismatch(corrupt(GOOD, 3, 0x80)),
             id="inverse-high-byte",
         ),
         pytest.param(
