@@ -64,8 +64,8 @@ def read_msg(in_file, rec_file, mode, state):
         msg = read_bytes(
             in_file, rec_file, MAGIC_LEN + MSG_HDR_LEN, mode, state
         )
-        if not msg:  # end of file
-            return (msg, True)
+        if len(msg) < MAGIC_LEN + MSG_HDR_LEN:  # end of file in the header
+            return (b"", True)
         (data_len, _data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
             struct.unpack("<HHHLLH", msg[MAGIC_LEN:])
         )
