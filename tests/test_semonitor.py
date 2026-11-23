@@ -534,7 +534,6 @@ def test_master_grant_ack_releases_the_bus(sm, files, req, _reply):
     assert not files.line.written
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #13")
 def test_master_grant_ack_with_data_releases_the_bus(sm, files):
     process(sm, frame(GRANT_ACK, b"\x01\x02"), files)
 

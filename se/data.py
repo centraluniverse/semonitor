@@ -5,7 +5,6 @@ Turns the payload of each protocol message into Python values, and formats
 values back into bytes. Parsed device data is written out as JSON lines.
 """
 
-import codecs
 import json
 import logging
 import struct
@@ -84,12 +83,12 @@ def parse_data(function, data):
     """
     name = se.commands.code2function.get(function, "unknown function")
     if function in NO_ARGUMENTS:
-        parsed = "".join(x.encode("hex") for x in data)
+        parsed = data.hex()
     elif function in DATA_PARSERS:
         parsed = DATA_PARSERS[function](data)
     else:
         logger.info("No parser for %s (0x%04x)", name, function)
-        return codecs.encode(data, "hex").decode("ascii")
+        return data.hex()
     logger.debug("Parsed %s (0x%04x)", name, function)
     return parsed
 
@@ -662,7 +661,7 @@ def format_date_time(time_stamp):
     try:
         return time.asctime(time.localtime(time_stamp))
     except ValueError:
-        return "".join(x.encode("hex") for x in struct.pack("<L", time_stamp))
+        return struct.pack("<L", time_stamp).hex()
     except (OverflowError, OSError, TypeError) as ex:
         logger.info("Invalid timestamp: %s %s", time_stamp, ex)
         return "invalid"
