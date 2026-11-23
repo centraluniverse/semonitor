@@ -504,7 +504,6 @@ def test_format_long_is_what_parse_long_decodes():
     }
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #37")
 def test_format_value_type_is_what_parse_value_type_decodes():
     packed = se.data.format_value_type(0x1234, 0x0002)
 
