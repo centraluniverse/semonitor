@@ -110,11 +110,10 @@ def read_bytes(in_file, rec_file, length, mode, state):
                 time.sleep(SLEEP_INTERVAL)
                 in_buf = in_file.read(length)
         record_msg(in_buf, rec_file)
-        se.logutils.set_state(
-            state, "lastByteRead", f"{bytearray(in_buf)[-1]:02x}"
-        )
+        if in_buf:  # keep the last byte read at the end of file
+            se.logutils.set_state(state, "lastByteRead", f"{in_buf[-1]:02x}")
     # treat exceptions as end of file
-    except (IndexError, OSError, ValueError) as ex:
+    except (OSError, ValueError) as ex:
         logger.info("Exception while reading data: %s", ex)
         return b""
     else:

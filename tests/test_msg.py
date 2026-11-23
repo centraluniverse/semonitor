@@ -482,12 +482,20 @@ def test_read_bytes_treats_the_end_of_file_as_empty(caplog, record):
     )
 
     assert data == b""
-    assert any(
-        m.startswith("Exception while reading data")
-        for m in messages(caplog, logging.INFO)
-    )
+    assert not messages(caplog, logging.INFO)
     if record:
         assert recfile.getvalue() == b""
+
+
+def test_read_bytes_keeps_the_last_byte_read_at_the_end_of_file():
+    state = {}
+    infile = make_file(b"\x12\x34")
+
+    se.msg.read_bytes(infile, None, 2, run_mode(passive=True), state)
+    data = se.msg.read_bytes(infile, None, 2, run_mode(passive=True), state)
+
+    assert data == b""
+    assert state["lastByteRead"][1] == "34"
 
 
 def test_read_bytes_treats_exceptions_as_the_end_of_file(caplog):
