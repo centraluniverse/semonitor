@@ -1112,7 +1112,6 @@ def test_next_sequence_number_fails_when_it_can_not_be_saved(sm):
         sm.next_seq()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #14")
 @pytest.mark.parametrize("stored", ["garbage\n", ""])
 def test_next_sequence_number_restarts_after_a_damaged_file(sm, stored):
     Path(sm.SEQ_FILE_NAME).write_text(stored)

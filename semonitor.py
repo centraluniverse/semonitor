@@ -332,7 +332,7 @@ def next_seq():
         seq += 1
         if seq > MAX_SEQ:
             seq = 1
-    except OSError:
+    except OSError, ValueError:
         seq = 1
     with Path(SEQ_FILE_NAME).open("w") as seq_file:
         seq_file.write(str(seq) + "\n")
