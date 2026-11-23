@@ -37,12 +37,12 @@ LAST = max(JSON_FRAMES)
 TARGET = 9  # the frame that the faults are injected in
 
 LENGTH_ERRORS = (
-    "Data length is too big for the message",
-    "Data length doesn't match inverse length",
+    "is too big for a message",
+    "doesn't match inverse length",
 )
 CHECKSUM_ERRORS = ("Checksum error",)
 EXTRA_BYTES = ("extra bytes",)
-TRUNCATED = ("too short", "Data length is too big for the message")
+TRUNCATED = ("too short", "is too big for a message")
 ANY_ERROR = (*LENGTH_ERRORS, *CHECKSUM_ERRORS, "too short", "Failed to parse")
 
 # Pyserial only lists the real ports, so the pseudo terminal is added to the

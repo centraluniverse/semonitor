@@ -164,7 +164,12 @@ def validate_msg(msg):
     """
     # message must be at least a header and checksum
     if len(msg) < MSG_HDR_LEN + CHECKSUM_LEN:
-        return reject_msg(msg, "Message too short")
+        return reject_msg(
+            msg,
+            "Message of %d bytes is too short, at least %d bytes needed",
+            len(msg),
+            MSG_HDR_LEN + CHECKSUM_LEN,
+        )
     # parse the message header
     (data_len, data_len_inv, msg_seq, from_addr, to_addr, function) = (
         struct.unpack("<HHHLLH", msg[0:MSG_HDR_LEN])
@@ -174,10 +179,22 @@ def validate_msg(msg):
     )
     # header + data + checksum can't be longer than the message
     if MSG_HDR_LEN + data_len + CHECKSUM_LEN > len(msg):
-        return reject_msg(msg, "Data length is too big for the message")
+        return reject_msg(
+            msg,
+            "Data length %d is too big for a message of %d bytes",
+            data_len,
+            len(msg),
+        )
     # data length must match inverse length
     if data_len != ~data_len_inv & 0xFFFF:
-        return reject_msg(msg, "Data length doesn't match inverse length")
+        return reject_msg(
+            msg,
+            "Data length 0x%04x doesn't match inverse length 0x%04x, "
+            "expected 0x%04x",
+            data_len,
+            data_len_inv,
+            ~data_len & 0xFFFF,
+        )
     data = msg[MSG_HDR_LEN : MSG_HDR_LEN + data_len]
     # discard extra bytes after the message
     extra_len = len(msg) - (MSG_HDR_LEN + data_len + CHECKSUM_LEN)
