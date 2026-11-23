@@ -45,9 +45,9 @@ def read_msg(in_file, rec_file, mode, state):
     """
     Read the next message from the input file.
 
-    In active mode (not RS485) the magic number, header, data and checksum
-    are read in turn. In passive mode or RS485 bytes are read one at a time
-    until the next magic number is found.
+    An RS232 frame is read as the magic number, header, data and checksum in
+    turn. Any other input is read one byte at a time until the next magic
+    number is found.
 
     Returns:
         A tuple (msg, eof), where msg is the message without its magic number
@@ -58,8 +58,8 @@ def read_msg(in_file, rec_file, mode, state):
     Seq.data_in += 1
     msg = b""
     eof = False
-    if not mode.passive_mode and (mode.serial_type != "4"):
-        # active mode that is not RS485
+    if mode.serial_type == "2":
+        # RS232
         # read the magic number and header
         msg = read_bytes(
             in_file, rec_file, MAGIC_LEN + MSG_HDR_LEN, mode, state
@@ -75,7 +75,7 @@ def read_msg(in_file, rec_file, mode, state):
         )
         msg = msg[MAGIC_LEN:]  # strip the magic number from the beginning
     else:
-        # passive mode or RS485
+        # RS485, or a file or stdin
         # read 1 byte at a time until the next magic number
         while msg[-MAGIC_LEN:] != magic:
             next_byte = read_bytes(in_file, rec_file, 1, mode, state)
