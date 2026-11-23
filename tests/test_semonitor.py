@@ -1208,10 +1208,20 @@ def test_serial_device_output_is_appended_with_option_a(
     assert Path("in.rec").read_bytes() == rec * 2
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #12")
 def test_rs232_device_is_read_by_a_thread_while_the_program_waits(
-    run_semonitor, golden, monkeypatch, sample
+    request, run_semonitor, golden, monkeypatch, sample
 ):
+    if sample == "7f104920":
+        # the recording starts with text, and RS232 does not resync (Issue #75)
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "Issue #75: recording starts with 197 bytes of text (old "
+                    "network mode); the RS232 header read does not resync"
+                ),
+            )
+        )
     line = FakeSerialLine(golden("rec", sample).read_bytes(), DEVICE)
     install_serial(monkeypatch, line)
     threads = patch_threads(monkeypatch)
