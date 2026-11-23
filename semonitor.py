@@ -34,10 +34,12 @@ MASTER_ADDR = 0xFFFFFFFE
 SEQ_FILE_NAME = "seseq.txt"
 MAX_SEQ = 0xFFFF  # the sequence number wraps after this
 PROT_CMD_SERVER_KEY = 0x0503  # the message with the encryption key
+MAX_TIME_SKEW = 300  # seconds our clock may differ from the inverter's
 
 # global variables
 thread_lock = threading.Lock()  # lock to synchronize reads and writes
 master_event = threading.Event()  # event to signal RS485 master release
+inverter_skew = {"seconds": None}  # inverter clock minus ours, None if unknown
 
 
 @dataclasses.dataclass
@@ -56,6 +58,48 @@ def terminate(code=0, msg=b""):
     else:
         logger.error(msg)
     sys.exit(code)
+
+
+def get_inverter_time(msg_data):
+    """
+    Remember how far the inverter's clock is from ours.
+
+    The newest valid timestamp of the inverters and optimizers in the
+    performance data is taken as the inverter's time. Nothing is changed when
+    there is no valid timestamp.
+
+    Args:
+        msg_data: The parsed performance data of a message.
+    """
+    stamps = []
+    try:
+        for kind in ("inverters", "optimizers"):
+            for rec in msg_data.get(kind, {}).values():
+                if rec.get("Date") != "invalid":
+                    stamp = rec["Date"] + " " + rec["Time"]
+                    stamps.append(
+                        time.mktime(time.strptime(stamp, "%Y-%m-%d %H:%M:%S"))
+                    )
+    except AttributeError, KeyError, ValueError:
+        return
+    if stamps:
+        inverter_skew["seconds"] = max(stamps) - time.time()
+
+
+def check_time_skew():
+    """
+    Log a warning when our clock differs from the inverter's by too much.
+
+    Nothing is logged while the inverter's time is unknown, or while the
+    difference is at most MAX_TIME_SKEW seconds.
+    """
+    skew = inverter_skew["seconds"]
+    if skew is not None and abs(skew) > MAX_TIME_SKEW:
+        logger.warning(
+            "our clock is %d seconds %s the inverter's, check the system time",
+            abs(skew),
+            "behind" if skew > 0 else "ahead of",
+        )
 
 
 def read_data(args, mode, state, files):
@@ -111,6 +155,8 @@ def process_msg(msg, mode, state, files):
             # write performance data to output file
             se.data.write_data(msg_data, files.out)
         if mode.master_mode:  # send reply
+            if function == se.commands.PROT_CMD_SERVER_POST_DATA:
+                get_inverter_time(msg_data)
             (reply_function, reply_data) = master_reply(function, state)
             if reply_function:
                 msg = se.msg.format_msg(
@@ -134,6 +180,7 @@ def master_reply(function, state):
         # send ack
         return (se.commands.PROT_RESP_ACK, b"")
     if function == se.commands.PROT_CMD_SERVER_GET_GMT:  # time request
+        check_time_skew()
         # set time
         return (
             se.commands.PROT_RESP_SERVER_GMT,
