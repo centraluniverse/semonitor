@@ -327,7 +327,6 @@ def test_read_msg_returns_what_is_left_of_a_truncated_message(mode):
     assert se.msg.read_msg(infile, None, mode, {}) == (b"", True)
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #21")
 @pytest.mark.parametrize("mode", HEADER_MODES)
 def test_read_msg_reports_the_end_of_a_file_inside_the_header(mode):
     infile = make_file(MAGIC + GOOD[:6])
