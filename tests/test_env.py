@@ -624,7 +624,6 @@ def test_rs232_mode_is_not_passive(get_args, serial_port):
     assert not mode.passive_mode
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #39")
 @pytest.mark.parametrize("serial_type", ["2", "4"])
 def test_serial_device_is_followed(get_args, serial_port, serial_type):
     _args, mode = get_args("-t", serial_type, serial_port)
