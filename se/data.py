@@ -230,7 +230,7 @@ def format_value_type(value, data_type):
     Returns:
         The packed bytes.
     """
-    return struct.pack("<HL", value, data_type)
+    return struct.pack("<LH", value, data_type)
 
 
 def parse_param_value(data):
