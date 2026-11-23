@@ -485,13 +485,11 @@ def test_time_request_is_answered_like_the_real_master_did(
             "EET-2",
             2 * 3600,
             id="ahead-of-utc-past-midnight",
-            marks=pytest.mark.xfail(strict=True, reason="Issue #11"),
         ),
         pytest.param(
             "IST-5:30",
             (5 * 3600) + (30 * 60),
             id="half-hour-zone",
-            marks=pytest.mark.xfail(strict=True, reason="Issue #11"),
         ),
     ],
 )

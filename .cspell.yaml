@@ -94,6 +94,7 @@ words:
   - getfixturevalue
   - gettz
   - gmtime
+  - gmtoff
   - keepends
   - logutils
   - mktime
