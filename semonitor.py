@@ -140,7 +140,7 @@ def master_reply(function, state):
             se.commands.PROT_RESP_SERVER_GMT,
             se.data.format_time(
                 int(time.time()),
-                (time.localtime().tm_hour - time.gmtime().tm_hour) * 60 * 60,
+                time.localtime().tm_gmtoff,
             ),
         )
     if function == se.commands.PROT_RESP_POLESTAR_MASTER_GRANT_ACK:
