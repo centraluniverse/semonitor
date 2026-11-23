@@ -193,8 +193,8 @@ def validate_msg(msg):
         return reject_msg(
             msg,
             "Checksum error. Expected 0x%04x, got 0x%04x",
-            checksum,
             calcsum,
+            checksum,
         )
     return (msg_seq, from_addr, to_addr, function, data)
 

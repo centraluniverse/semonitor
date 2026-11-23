@@ -260,10 +260,12 @@ def test_message_without_extra_bytes_does_not_log_any(caplog):
     assert not [m for m in messages(caplog, DATA_LEVEL) if "extra" in m]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #42")
 def test_checksum_error_reports_the_calculated_sum_as_expected(caplog):
     log_all(caplog, DATA_LEVEL)
-    calculated = struct.unpack("<H", GOOD[-2:])[0]
+    (msg_seq, from_addr, to_addr, function, data) = se.msg.parse_msg(GOOD)
+    calculated = se.msg.calc_crc(
+        struct.pack(">HLLH", msg_seq, from_addr, to_addr, function) + data
+    )
     received = calculated ^ 0x0101
 
     se.msg.parse_msg(GOOD[:-2] + struct.pack("<H", received))
