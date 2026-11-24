@@ -131,7 +131,6 @@ def test_a_row_is_written_for_every_device_of_every_line(workdir, monkeypatch):
     assert rows[2].split(",")[3] == "2.5"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #29")
 def test_the_delimiter_can_be_changed(workdir, monkeypatch):
     stdin = line(inverters={"I1": inverter("I1")})
 
