@@ -173,15 +173,7 @@ def validate_msg(msg):
     log_msg_hdr(
         MsgHdr(data_len, data_len_inv, msg_seq, from_addr, to_addr, function)
     )
-    # header + data + checksum can't be longer than the message
-    if MSG_HDR_LEN + data_len + CHECKSUM_LEN > len(msg):
-        return reject_msg(
-            msg,
-            "Data length %d is too big for a message of %d bytes",
-            data_len,
-            len(msg),
-        )
-    # data length must match inverse length
+    # data length must match inverse length, before the length is used
     if data_len != ~data_len_inv & 0xFFFF:
         return reject_msg(
             msg,
@@ -190,6 +182,14 @@ def validate_msg(msg):
             data_len,
             data_len_inv,
             ~data_len & 0xFFFF,
+        )
+    # header + data + checksum can't be longer than the message
+    if MSG_HDR_LEN + data_len + CHECKSUM_LEN > len(msg):
+        return reject_msg(
+            msg,
+            "Data length %d is too big for a message of %d bytes",
+            data_len,
+            len(msg),
         )
     data = msg[MSG_HDR_LEN : MSG_HDR_LEN + data_len]
     # discard extra bytes after the message

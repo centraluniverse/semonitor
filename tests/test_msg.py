@@ -197,8 +197,8 @@ def test_validate_msg_rejects_a_message_that_is_too_short(caplog, length):
         pytest.param(GOOD[:-1], too_big(GOOD[:-1]), id="too-big"),
         pytest.param(
             corrupt(GOOD, 0, 0x10),
-            too_big(corrupt(GOOD, 0, 0x10)),
-            id="length-too-big",
+            inverse_mismatch(corrupt(GOOD, 0, 0x10)),
+            id="length-byte-only",
         ),
         pytest.param(
             corrupt(GOOD, 2, 0x01),
