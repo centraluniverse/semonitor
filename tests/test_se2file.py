@@ -406,13 +406,12 @@ def test_a_missing_base_directory_is_an_error_not_silently_ignored(se2file):
 # --- debug -------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_debug_shows_the_data_that_is_received(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
     se2file("-v", "-b", "out", stdin=['{"a": 1}\n'])
 
-    assert 'Got some data: {"a": 1}' in capsys.readouterr().out
+    assert 'Got some data: {"a": 1}' in capsys.readouterr().err
 
 
 def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
@@ -423,16 +422,14 @@ def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_debug_shows_a_new_file_name(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
     se2file("-v", "-b", "out", stdin=['{"a": 1}\n'])
 
-    assert "solardata_2016-01-01-12.json" in capsys.readouterr().out
+    assert "solardata_2016-01-01-12.json" in capsys.readouterr().err
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #32")
 def test_debug_reports_the_loop_count_with_a_readable_time(
     workdir, se2file, capsys
 ):
@@ -443,7 +440,7 @@ def test_debug_reports_the_loop_count_with_a_readable_time(
             "-v", "-b", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True
         )
 
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     # %M (minutes) and %S (seconds), not %m (month) and %s (epoch)
     assert "We've looped 60 times at 2016-01-01-12:30:00" in out
 

@@ -119,8 +119,10 @@ def main():
                 lcnt = 0
                 if debug:
                     curtime = dt.datetime.now().astimezone()
-                    curstr = curtime.strftime("%Y-%m-%d-%H:%m:%s")
-                    sys.stderr.write(f"Looped {lreport} times at {curstr}\n")
+                    curstr = curtime.strftime("%Y-%m-%d-%H:%M:%S")
+                    sys.stderr.write(
+                        f"We've looped {lreport} times at {curstr}\n"
+                    )
 
 
 def getargs():
