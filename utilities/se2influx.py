@@ -391,7 +391,7 @@ def parse_args() -> argparse.Namespace:
         "--host", help="hostname to connect to InfluxDB", default="localhost"
     )
     db_args.add_argument(
-        "--port", help="port to connect to InfluxDB", default=8086
+        "--port", help="port to connect to InfluxDB", default=8086, type=int
     )
     db_args.add_argument(
         "--username", help="username to connect as", default="root"
@@ -421,12 +421,16 @@ def parse_args() -> argparse.Namespace:
         "--retries",
         help="number of attempts your client will make before aborting",
         default=3,
+        type=int,
     )
     db_args.add_argument(
         "--use_udp", help="use UDP to connect to InfluxDB", action="store_true"
     )
     db_args.add_argument(
-        "--udp_port", help="UDP port to connect to InfluxDB", default=4444
+        "--udp_port",
+        help="UDP port to connect to InfluxDB",
+        default=4444,
+        type=int,
     )
 
     other_args = parser.add_argument_group(description="Control options.")
@@ -434,6 +438,7 @@ def parse_args() -> argparse.Namespace:
         "--queue_size",
         help="size (in lines) to limit buffer queues to",
         default=10000,
+        type=int,
     )
     other_args.add_argument(
         "--log_path",
@@ -444,6 +449,7 @@ def parse_args() -> argparse.Namespace:
         "--max_log_size",
         help="size in bytes after which to rotate and compress logged data",
         default=1024000,
+        type=int,
     )
     other_args.add_argument(
         "--local_tz",
