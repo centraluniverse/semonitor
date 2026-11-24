@@ -1101,7 +1101,7 @@ class ParseDeviceExplorer(ParseDevice):
         # (or in other words, ParseDeviceExplorer.se_type will contain a
         # nonsense value which must be corrected when real data is read)
         self.dev_type = f"{self._dev_name}_{se_type:#06x}"
-        self._seId = se_id
+        self._seId = self.parse_id(se_id)
 
         data_ptr += dev_hdr_len
         self.update(
