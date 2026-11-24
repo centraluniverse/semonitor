@@ -110,7 +110,6 @@ def test_every_option_can_be_given(parse):
 
 
 # queue.Queue(maxsize="50") and the size comparison of the log need numbers
-@pytest.mark.xfail(strict=True, reason="Issue #27")
 @pytest.mark.parametrize(
     ("option", "attribute", "value"),
     [
