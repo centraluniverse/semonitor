@@ -95,6 +95,7 @@ if __name__ == "__main__":
                             )
                         ),
                         item_names,
+                        delimiter=args.delimiter,
                     )
                     if args.headers:
                         devs_file[dev_name].writeheader()
