@@ -103,8 +103,20 @@ else:
         with Path(out_file_name).open() as state_file:
             state_dict = json.load(state_file)
     except OSError:
-        # Without a state file there is no state, see Issue #18
-        pass
+        # Without a state file, start from zeroed statistics
+        state_dict = {
+            "inverters": {
+                "stats": {
+                    "Vac": 0.0,
+                    "Pac": 0.0,
+                    "Eac": 0.0,
+                    "Eday": 0.0,
+                    "Etot": 0.0,
+                    "Temp": 0.0,
+                }
+            },
+            "optimizers": {"stats": {"Temp": 0.0}},
+        }
 
 # read the input forever
 with in_file:
