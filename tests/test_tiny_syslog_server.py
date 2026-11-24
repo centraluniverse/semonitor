@@ -121,7 +121,6 @@ def test_surrounding_whitespace_is_removed(workdir, load):
     assert log_text(workdir) == "padded message\n"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #83")
 def test_the_message_is_shown_with_the_address_of_the_sender(load, capsys):
     namespace = load()
 
@@ -129,7 +128,7 @@ def test_the_message_is_shown_with_the_address_of_the_sender(load, capsys):
         namespace["SyslogUDPHandler"], b"hello", ("198.51.100.4", 5140)
     ).handle()
 
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "198.51.100.4" in out
     assert "hello" in out
     assert "5140" not in out
@@ -202,13 +201,12 @@ def test_importing_does_not_start_a_server(load, fake_server):
     assert fake_server.created == []
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #83")
 def test_control_c_stops_the_server_with_a_message(load, fake_server, capsys):
     fake_server.action = KeyboardInterrupt()
 
     load("__main__")
 
-    assert "Shutting down" in capsys.readouterr().out
+    assert "Shutting down" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
