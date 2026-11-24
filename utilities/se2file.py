@@ -79,7 +79,6 @@ def main():
         writefilename = ""
         json_str = ""
         lcnt = 0
-        filebuffersize = 0
         blank_cnt = 0
         while (
             looper or blank_cnt <= blank_max
@@ -102,9 +101,7 @@ def main():
                     writefilename = tfname
 
                 # The file is closed again right away, so we never keep it open
-                with Path(writefilename).open(
-                    "a", buffering=filebuffersize
-                ) as writefile:
+                with Path(writefilename).open("a") as writefile:
                     writefile.write(json_str + "\n")
                 lastwrite = curepoch
                 json_str = ""

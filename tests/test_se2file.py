@@ -164,7 +164,6 @@ def test_unknown_options_are_refused(getargs):
 # --- files that are written --------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_each_line_of_a_file_is_appended_to_the_hourly_file(workdir, se2file):
     (workdir / "in.json").write_text('{"a": 1}\n{"b": 2}\n')
     (workdir / "out").mkdir()
@@ -176,7 +175,6 @@ def test_each_line_of_a_file_is_appended_to_the_hourly_file(workdir, se2file):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_lines_are_stripped_and_blank_lines_are_not_stored(workdir, se2file):
     (workdir / "in.json").write_text('  {"a": 1}  \r\n\n   \n{"b": 2}\n')
     (workdir / "out").mkdir()
@@ -188,7 +186,6 @@ def test_lines_are_stripped_and_blank_lines_are_not_stored(workdir, se2file):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_stdin_is_the_default_input(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -199,7 +196,6 @@ def test_stdin_is_the_default_input(workdir, se2file):
     ).read_text() == '{"a": 1}\n'
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_existing_files_are_extended_and_not_overwritten(workdir, se2file):
     (workdir / "out").mkdir()
     existing = workdir / "out" / "solardata_2016-01-01-12.json"
@@ -210,7 +206,6 @@ def test_existing_files_are_extended_and_not_overwritten(workdir, se2file):
     assert existing.read_text() == '{"old": 0}\n{"a": 1}\n'
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_the_prefix_is_used_in_the_file_name(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -219,7 +214,6 @@ def test_the_prefix_is_used_in_the_file_name(workdir, se2file):
     assert (workdir / "out" / "site-2016-01-01-12.json").is_file()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_daily_files_have_the_day_but_not_the_hour_in_their_name(
     workdir, se2file
 ):
@@ -232,7 +226,6 @@ def test_daily_files_have_the_day_but_not_the_hour_in_their_name(
     ]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_new_hour_starts_a_new_file(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -252,7 +245,6 @@ def test_a_new_hour_starts_a_new_file(workdir, se2file):
     ]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_new_hour_does_not_start_a_new_daily_file(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -267,7 +259,6 @@ def test_a_new_hour_does_not_start_a_new_daily_file(workdir, se2file):
     assert path.read_text() == '{"a": 1}\n{"b": 2}\n'
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_new_day_starts_a_new_daily_file(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -284,7 +275,6 @@ def test_a_new_day_starts_a_new_daily_file(workdir, se2file):
     ]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_directory_per_day_is_made_on_request(workdir, se2file):
     (workdir / "out").mkdir()
 
@@ -303,7 +293,6 @@ def test_a_directory_per_day_is_made_on_request(workdir, se2file):
     ).is_file()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_directory_per_day_that_exists_is_used(workdir, se2file):
     (workdir / "out" / "2016-01-01").mkdir(parents=True)
 
@@ -314,7 +303,6 @@ def test_a_directory_per_day_that_exists_is_used(workdir, se2file):
     ).is_file()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_the_output_files_are_not_left_open(workdir, se2file, monkeypatch):
     (workdir / "out").mkdir()
     opened = []
@@ -336,7 +324,6 @@ def test_the_output_files_are_not_left_open(workdir, se2file, monkeypatch):
 # --- when to stop ------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_file_is_processed_once_and_then_the_script_ends(
     workdir, se2file, clock
 ):
@@ -349,7 +336,6 @@ def test_a_file_is_processed_once_and_then_the_script_ends(
     assert 0 < len(clock.sleeps) <= 20
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_waiting_forever_on_stdin_goes_on_after_many_blank_lines(
     workdir, se2file
 ):
@@ -379,7 +365,6 @@ def test_stdin_without_waiting_forever_ends_after_a_few_blank_lines(
     assert list((workdir / "out").iterdir()) == []
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_a_blank_line_count_is_reset_by_data(workdir, se2file):
     (workdir / "out").mkdir()
     items = ([""] * 8 + ['{"a": 1}\n']) * 3
@@ -430,7 +415,6 @@ def test_debug_shows_the_data_that_is_received(workdir, se2file, capsys):
     assert 'Got some data: {"a": 1}' in capsys.readouterr().out
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
