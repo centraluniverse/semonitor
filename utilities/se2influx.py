@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+"""Read semonitor.py output and write it to an InfluxDB and a log file."""
 
 import argparse
+import contextlib
 import gzip
 import json
 import logging
-import os
 import queue
 import select
 import shutil
@@ -13,18 +14,23 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from math import isnan
+from pathlib import Path
+from typing import Any
 
 import influxdb
 from dateutil import tz
-from math import isnan
 
 STDIN_TIMEOUT = 1
 DB_ERROR_SLEEP = 30
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class InfluxParams:
+    """Connection settings for the InfluxDB server."""
+
     host: str
     port: int
     username: str
@@ -38,31 +44,49 @@ class InfluxParams:
     udp_port: int
 
 
+@dataclass
+class LogParams:
+    """Settings for the optional log file of raw semonitor output."""
+
+    path: str | None
+    max_size: int
+
+
 class DateError(Exception):
-    pass
-
-
-class EndOfFile(Exception):
-    pass
+    """Raised when the date and time of a message cannot be converted."""
 
 
 class Se2Influx:
+    """Read semonitor data from stdin, write it to InfluxDB and a log file."""
+
     def __init__(
         self,
         influx_params: InfluxParams,
         queue_size: int,
-        log_path: Optional[str],
-        max_log_size: int,
-        local_tz: Optional[str],
-        stat_timer_secs: Optional[int],
+        log_params: LogParams,
+        local_tz: str | None,
+        stat_timer_secs: int | None,
     ) -> None:
+        """
+        Store the settings and create the queues and the shutdown event.
 
+        Args:
+            influx_params: The InfluxDB connection settings.
+            queue_size: The maximum number of lines in each queue.
+            log_params: The settings for the optional log file.
+            local_tz: The name of the time zone the inverter uses, or None
+                for the local machine time zone.
+            stat_timer_secs: How often, in seconds, to log the number of data
+                points written, or None to log nothing.
+        """
         self.influx_params = influx_params
-        self.log_path = log_path
-        self.max_log_size = max_log_size
+        self.log_path = log_params.path
+        self.max_log_size = log_params.max_size
         self.stat_timer_secs = stat_timer_secs
 
-        self.local_tz = tz.gettz(local_tz) if local_tz is not None else tz.tzlocal()
+        self.local_tz = (
+            tz.gettz(local_tz) if local_tz is not None else tz.tzlocal()
+        )
         if self.local_tz is None:
             sys.exit(f"Time-zone not found: {local_tz}")
 
@@ -72,12 +96,12 @@ class Se2Influx:
 
     def run(self) -> None:
         """
-        Run method;  start our read, write and (optionally) logger threads and then
-        block forever or until one of the threads exits (which should only happen
-        if they hit an exception)
-        """
+        Start the reader, writer and (optionally) logger threads.
 
-        logging.info("Starting reader & writer threads")
+        Then block until one of the threads exits, which should only happen if
+        it hits an exception.
+        """
+        logger.info("Starting reader & writer threads")
         reader_thread = threading.Thread(target=self.reader, daemon=True)
         reader_thread.setName("reader")
         writer_thread = threading.Thread(target=self.writer, daemon=True)
@@ -85,7 +109,7 @@ class Se2Influx:
         threads = [reader_thread, writer_thread]
 
         if self.log_path:
-            logging.info("Starting logger thread")
+            logger.info("Starting logger thread")
             logger_thread = threading.Thread(target=self.logger, daemon=True)
             logger_thread.setName("logger")
             threads.append(logger_thread)
@@ -98,7 +122,7 @@ class Se2Influx:
                 break
             for thread in threads:
                 if not thread.is_alive():
-                    logging.warning("Thread for %s shut down", thread.name)
+                    logger.warning("Thread for %s shut down", thread.name)
                     self.shutdown.set()
 
             time.sleep(1)
@@ -106,21 +130,27 @@ class Se2Influx:
         for thread in threads:
             thread.join()
 
-        logging.info("%s lines left in writer queue", self.writer_queue.qsize())
-        logging.info("%s lines left in logger queue", self.logger_queue.qsize())
+        logger.info("%s lines left in writer queue", self.writer_queue.qsize())
+        logger.info("%s lines left in logger queue", self.logger_queue.qsize())
 
     def reader(self) -> None:
         """
-        Reader method: execute a blocking read on stdin with a timeout, after which
-        we check to see if we need to shutdown.  Any data gets sent to our output queues
-        for ingestion by writer threads.
+        Read lines from stdin and pass them to the output queues.
+
+        Each read blocks with a timeout, after which we check to see if we need
+        to shut down. Any data gets sent to our output queues for ingestion by
+        writer threads.
         """
         try:
             while True:
-                while sys.stdin in select.select([sys.stdin], [], [], STDIN_TIMEOUT)[0]:
+                while (
+                    sys.stdin
+                    in select.select([sys.stdin], [], [], STDIN_TIMEOUT)[0]
+                ):
                     line = sys.stdin.readline()
                     if not line:
-                        raise EndOfFile()
+                        logger.info("Reached end of input")
+                        return
                     self.writer_queue.put(line)
 
                     if self.log_path:
@@ -129,32 +159,21 @@ class Se2Influx:
                 if self.shutdown.is_set():
                     return
 
-        except EndOfFile:
-            logging.info("Reached end of input")
-        except Exception as e:
-            logging.error("Error reading from stdin: %s", e)
+        except Exception:
+            logger.exception("Error reading from stdin")
 
     def writer(self) -> None:
         """
-        Writer method: read data from our queue, parse the json, turn it into
-        valid influxdb data points, and then write it to our influxDB. Based on
-        the configured retries, we may end up blocking forever on the write if
-        the DB is down/unavailable.
-        """
+        Write data from our queue to InfluxDB.
 
-        logging.info("Connecting to InfluxDB")
+        Reads the JSON from the queue, turns it into valid InfluxDB data points
+        and writes them to our InfluxDB. Based on the configured retries, we may
+        end up blocking forever on the write if the DB is down or unavailable.
+        """
+        logger.info("Connecting to InfluxDB")
         db_client = influxdb.InfluxDBClient(**self.influx_params.__dict__)
 
-        # Create the database if it doesn't exist
-        try:
-            available_dbs = [db["name"] for db in db_client.get_list_database()]
-            if self.influx_params.database not in available_dbs:
-                logging.info(
-                    "DB %s missing; attempting to create", self.influx_params.database
-                )
-                db_client.create_database(self.influx_params.database)
-        except Exception as e:
-            logging.error("Unable to connect to influxdb host or create DB: %s", e)
+        if not self._create_database(db_client):
             return
 
         data_points_written = 0
@@ -163,7 +182,9 @@ class Se2Influx:
             if self.stat_timer_secs is not None:
                 now = int(time.time())
                 if now > last_stat_print + self.stat_timer_secs:
-                    logging.info("Data points written to DB: %s", data_points_written)
+                    logger.info(
+                        "Data points written to DB: %s", data_points_written
+                    )
                     data_points_written = 0
                     last_stat_print = now
 
@@ -176,95 +197,131 @@ class Se2Influx:
 
             try:
                 se_data = json.loads(line)
-            except json.decoder.JSONDecodeError as e:
-                logging.error("Got bad JSON data; %s -- %s", line, e)
+            except json.decoder.JSONDecodeError:
+                logger.exception("Got bad JSON data; %s", line)
                 continue
 
-            data_out = []
-            try:
-                for hw_type in ("inverters", "optimizers"):
-                    for serial, hw_data in se_data[hw_type].items():
-                        # InfluxDB does not like NaN floats, so we filter them out
-                        hw_data = {
-                            k: v
-                            for k, v in hw_data.items()
-                            if not (isinstance(v, float) and isnan(v))
-                        }
-                        utc_date = self._pop_utc_date(hw_data)
-                        data_out.append(
-                            {
-                                "measurement": hw_type,
-                                "tags": {"serial": serial},
-                                "time": utc_date,
-                                "fields": hw_data,
-                            }
-                        )
-
-            except KeyError as e:
-                logging.error(
-                    "Decoded JSON missing required fields: %s -- %s", se_data, e
-                )
-
-            except DateError as e:
-                logging.error("Error converting dates in JSON: %s -- %s", se_data, e)
-
+            data_out = self._data_points(se_data)
             if not data_out:
                 continue
 
             try:
-                logging.debug("Writing to influxdb: %s", data_out)
+                logger.debug("Writing to influxdb: %s", data_out)
                 db_client.write_points(data_out)
                 data_points_written += len(data_out)
-            except Exception as e:
-                logging.error("Error writing to influx db: %s", e)
+            except Exception:
+                logger.exception("Error writing to influx db")
+
+    def _create_database(self, db_client) -> bool:
+        """
+        Create the database if it doesn't exist, and return if it is there.
+
+        Args:
+            db_client: The InfluxDB client to create the database with.
+
+        Returns:
+            True if the database is there, False if the host cannot be reached
+            or the database cannot be created.
+        """
+        try:
+            available_dbs = [db["name"] for db in db_client.get_list_database()]
+            if self.influx_params.database not in available_dbs:
+                logger.info(
+                    "DB %s missing; attempting to create",
+                    self.influx_params.database,
+                )
+                db_client.create_database(self.influx_params.database)
+        except Exception:
+            logger.exception("Unable to connect to influxdb host or create DB")
+            return False
+        return True
+
+    def _data_points(self, se_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """
+        Turn the decoded JSON of a message into InfluxDB data points.
+
+        Args:
+            se_data: The decoded JSON of a message.
+
+        Returns:
+            The list of data points, empty if the message cannot be converted.
+        """
+        data_out = []
+        try:
+            for hw_type in ("inverters", "optimizers"):
+                for serial, hw_data in se_data[hw_type].items():
+                    # InfluxDB does not like NaN floats, so we filter them out
+                    fields = {
+                        k: v
+                        for k, v in hw_data.items()
+                        if not (isinstance(v, float) and isnan(v))
+                    }
+                    utc_date = self.pop_utc_date(fields)
+                    data_out.append(
+                        {
+                            "measurement": hw_type,
+                            "tags": {"serial": serial},
+                            "time": utc_date,
+                            "fields": fields,
+                        }
+                    )
+
+        except KeyError:
+            logger.exception(
+                "Decoded JSON missing required fields: %s", se_data
+            )
+
+        except DateError:
+            logger.exception("Error converting dates in JSON: %s", se_data)
+        return data_out
 
     def logger(self) -> None:
         """
-        Logger method:  this just takes our input data (read from stdin and
-        written to our input queue) and writes it verbatim out to a file, with
-        options for file rotation and compression.  This is useful if we need
-        to later replay data and re-insert it into our influx DB (influxDB
-        handles duplicate data points by overwriting field data, so this should
-        be fine)
+        Write the raw input data verbatim to the log file.
+
+        This takes our input data (read from stdin and written to our input
+        queue) and writes it out to a file, with options for file rotation and
+        compression. This is useful if we need to later replay data and
+        re-insert it into our InfluxDB (InfluxDB handles duplicate data points
+        by overwriting field data, so this should be fine).
         """
-
         while True:
-            try:
-                log_fh = open(self.log_path, "a")
-            except Exception as e:
-                logging.error("Error opening %s: %s", self.log_path, e)
-                return
-
-            while True:
+            with contextlib.ExitStack() as stack:
                 try:
-                    line = self.logger_queue.get(timeout=1)
-                except queue.Empty:
-                    if self.shutdown.is_set():
-                        return
-                    continue
-
-                try:
-                    log_fh.write(line)
-                    log_fh.flush()
-                except Exception as e:
-                    logging.error("Error writing to %s: %s", self.log_path, e)
+                    log_fh = stack.enter_context(Path(self.log_path).open("a"))
+                except Exception:
+                    logger.exception("Error opening %s", self.log_path)
                     return
 
-                size = os.stat(self.log_path).st_size
-                if self.max_log_size and size > self.max_log_size:
-                    log_fh.close()
+                while True:
                     try:
-                        self._rotate_log()
-                    except Exception as e:
-                        logging.error("Failed to rotate file: %s, %s", self.log_path, e)
-                    break
+                        line = self.logger_queue.get(timeout=1)
+                    except queue.Empty:
+                        if self.shutdown.is_set():
+                            return
+                        continue
 
-    def _rotate_log(self) -> None:
-        """
-        Rotate and copress logs once they get too big
-        """
+                    try:
+                        log_fh.write(line)
+                        log_fh.flush()
+                    except Exception:
+                        logger.exception("Error writing to %s", self.log_path)
+                        return
 
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+                    size = Path(self.log_path).stat().st_size
+                    if self.max_log_size and size > self.max_log_size:
+                        log_fh.close()
+                        try:
+                            self.rotate_log()
+                        except Exception:
+                            logger.exception(
+                                "Failed to rotate file: %s", self.log_path
+                            )
+                        break
+
+    def rotate_log(self) -> None:
+        """Rotate and compress logs once they get too big."""
+        ts = datetime.now().astimezone().strftime("%Y%m%d%H%M%S")
         log_root, sep, log_ext = self.log_path.rpartition(".")
         if not log_root:
             log_root = log_ext
@@ -272,21 +329,32 @@ class Se2Influx:
 
         gz_log = f"{log_root}-{ts}{sep}{log_ext}.gz"
 
-        with open(self.log_path, "rb") as f_in:
-            with gzip.open(gz_log, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        with (
+            Path(self.log_path).open("rb") as f_in,
+            gzip.open(gz_log, "wb") as f_out,
+        ):
+            shutil.copyfileobj(f_in, f_out)
 
-        with open(self.log_path, "w"):
+        with Path(self.log_path).open("w"):
             pass
 
-    def _pop_utc_date(self, data: Dict[str, Any]) -> str:
+    def pop_utc_date(self, data: dict[str, Any]) -> str:
         """
-        Take a semonitor data strict, remove the time and date fields, and then
-        convert them (using a user-specified timezone, if existant, or otherwise
-        our local machine timezone) to a UTC-based string format required by
-        python-influxdb
-        """
+        Remove the date and time fields and return them as a UTC string.
 
+        The date and time are removed from data and converted (using the
+        user-specified time zone, or otherwise our local machine time zone) to
+        the UTC-based string format required by python-influxdb.
+
+        Args:
+            data: The fields of a data point, with the Date and Time items.
+
+        Returns:
+            The date and time as a UTC string.
+
+        Raises:
+            DateError: If the date and time cannot be converted.
+        """
         date = data.pop("Date")
         time = data.pop("Time")
 
@@ -301,18 +369,29 @@ class Se2Influx:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse the command line arguments.
 
+    Returns:
+        The parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(
-        description="Read semonitor.py output and write to an influxdb, and optionally a log file",
+        description="Read semonitor.py output and write to an InfluxDB, and optionally a log file.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    db_args = parser.add_argument_group(description="InfluxDB options")
+    db_args = parser.add_argument_group(description="InfluxDB options.")
     db_args.add_argument(
         "--host", help="hostname to connect to InfluxDB", default="localhost"
     )
-    db_args.add_argument("--port", help="port to connect to InfluxDB", default=8086)
-    db_args.add_argument("--username", help="user to connect", default="root")
-    db_args.add_argument("--password", help="password of the user", default="root")
+    db_args.add_argument(
+        "--port", help="port to connect to InfluxDB", default=8086
+    )
+    db_args.add_argument(
+        "--username", help="username to connect as", default="root"
+    )
+    db_args.add_argument(
+        "--password", help="password of the user", default="root"
+    )
     db_args.add_argument(
         "--database", help="database name to connect to", default="semonitor"
     )
@@ -328,7 +407,7 @@ def parse_args() -> argparse.Namespace:
     )
     db_args.add_argument(
         "--timeout",
-        help="number of seconds to wait for your client to establish a connection",
+        help="Number of seconds to wait for your client to establish a connection.",
         type=int,
     )
     db_args.add_argument(
@@ -343,37 +422,39 @@ def parse_args() -> argparse.Namespace:
         "--udp_port", help="UDP port to connect to InfluxDB", default=4444
     )
 
-    other_args = parser.add_argument_group(description="Control options")
+    other_args = parser.add_argument_group(description="Control options.")
     other_args.add_argument(
-        "--queue_size", help="Size (in lines) to limit buffer queues to", default=10000
+        "--queue_size",
+        help="size (in lines) to limit buffer queues to",
+        default=10000,
     )
     other_args.add_argument(
         "--log_path",
-        help="Log file to semonitor.py data to; leave unset to prevent writing log data",
+        help="Log file to write semonitor.py data to; leave unset to prevent writing log data.",
         type=str,
     )
     other_args.add_argument(
         "--max_log_size",
-        help="Size in bytes after which to rotate+compress logged data",
+        help="size in bytes after which to rotate and compress logged data",
         default=1024000,
     )
     other_args.add_argument(
         "--local_tz",
         help=(
             "Timezone string (from /usr/share/zoneinfo/) that our inverter is set to; "
-            "if unset will default to local machine tz"
+            "if unset, defaults to the local machine time zone."
         ),
         type=str,
     )
     other_args.add_argument(
         "--stat_timer_secs",
-        help="Print # data points written every N seconds; if unset print nothing",
+        help="Print # data points written every N seconds; if unset print nothing.",
         type=int,
     )
     other_args.add_argument(
         "--debug",
         action="store_true",
-        help="Display debug-level log messages",
+        help="display debug-level log messages",
     )
 
     return parser.parse_args()
@@ -403,8 +484,7 @@ if __name__ == "__main__":
     se2influx = Se2Influx(
         db_params,
         args.queue_size,
-        args.log_path,
-        args.max_log_size,
+        LogParams(args.log_path, args.max_log_size),
         args.local_tz,
         args.stat_timer_secs,
     )

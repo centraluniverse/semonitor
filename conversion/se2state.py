@@ -1,101 +1,161 @@
 #!/usr/bin/env python3
+"""
+Maintain a file containing the current state and selected statistics.
 
-# Maintain a file containing the current state and selected statistics
-# of SolarEdge inverters and optimizers
+The state covers SolarEdge inverters and optimizers.
+"""
 
-import json
 import getopt
-import time
+import json
 import sys
+import time
+from pathlib import Path
+
+from common import open_input
 
 initialize = False
 
-# return the sum of the specified attribute of the items in the specified dictionary
-# ignore the stats item
-def sumItems(itemDict, itemAttr):
-    itemSum = 0
-    for item in itemDict.keys():
-        if item != "stats":
-            itemSum += itemDict[item][itemAttr]
-    return itemSum
 
-# return the average of the specified attribute of the items in the specified dictionary
-# ignore the stats item
-def avgItems(itemDict, itemAttr):
+def sum_items(item_dict, item_attr):
+    """
+    Return the sum of an attribute over the items in a dictionary.
+
+    The stats item is ignored.
+
+    Args:
+        item_dict: The dictionary of items.
+        item_attr: The name of the attribute to sum.
+
+    Returns:
+        The sum of the attribute.
+    """
+    item_sum = 0
+    for item in item_dict:
+        if item != "stats":
+            item_sum += item_dict[item][item_attr]
+    return item_sum
+
+
+def avg_items(item_dict, item_attr):
+    """
+    Return the average of an attribute over the items in a dictionary.
+
+    The stats item is ignored.
+
+    Args:
+        item_dict: The dictionary of items.
+        item_attr: The name of the attribute to average.
+
+    Returns:
+        The average of the attribute, 0 when there are no items.
+    """
     try:
-        return sumItems(itemDict, itemAttr)/(len(itemDict) - 1)
+        return sum_items(item_dict, item_attr) / (len(item_dict) - 1)
     except ZeroDivisionError:
         return 0
 
-def writeState(stateDict, outFileName):
-    # update the state file
-    with open(outFileName, "w") as outFile:
-        json.dump(stateDict, outFile)
+
+def write_state(state_dict, out_file_name):
+    """Write the state dictionary to the state file as JSON."""
+    with Path(out_file_name).open("w") as out_file:
+        json.dump(state_dict, out_file)
+
 
 # get program arguments and options
 (opts, args) = getopt.getopt(sys.argv[1:], "i:o:")
-try:
-    inFile = open(args[0])
-except:
-    inFile = sys.stdin
+in_file = open_input(args)
 for opt in opts:
     if opt[0] == "-i":
         initialize = True
         inverters = opt[1].split(",")
     if opt[0] == "-o":
-        outFileName = opt[1]
+        out_file_name = opt[1]
 
 # initialize the state dictionary
 if initialize:
     # zero the statistics
-    stateDict = {"inverters":
-                    {"stats": {"Vac": 0.0, "Pac":0.0, "Eac":0.0, "Eday": 0.0, "Etot": 0.0, "Temp": 0.0}},
-                "optimizers":
-                    {"stats": {"Temp": 0.0}}}
+    state_dict = {
+        "inverters": {
+            "stats": {
+                "Vac": 0.0,
+                "Pac": 0.0,
+                "Eac": 0.0,
+                "Eday": 0.0,
+                "Etot": 0.0,
+                "Temp": 0.0,
+            }
+        },
+        "optimizers": {"stats": {"Temp": 0.0}},
+    }
     for inverter in inverters:
-        stateDict["inverters"]["stats"][inverter] = {"Vac":0.0, "Pac":0.0, "Eac":0.0, "Eday":0.0, "Etot": 0.0, "Temp": 0.0}
-    writeState(stateDict, outFileName)
+        state_dict["inverters"]["stats"][inverter] = {
+            "Vac": 0.0,
+            "Pac": 0.0,
+            "Eac": 0.0,
+            "Eday": 0.0,
+            "Etot": 0.0,
+            "Temp": 0.0,
+        }
+    write_state(state_dict, out_file_name)
 else:
     # start with values from the file if it exists
     try:
-        with open(outFileName) as stateFile:
-            stateDict = json.load(stateFile)
-    except IOError:
+        with Path(out_file_name).open() as state_file:
+            state_dict = json.load(state_file)
+    except OSError:
+        # Without a state file there is no state, see Issue #18
         pass
 
 # read the input forever
-while True:
-    jsonStr = ""
-    # wait for data
-    while jsonStr == "":
-        time.sleep(.1)
-        jsonStr = inFile.readline()
-    inDict = json.loads(jsonStr)
-    # update the state values
-    stateDict["inverters"].update(inDict["inverters"])
-    stateDict["optimizers"].update(inDict["optimizers"])
-    # compute optimizer power
-    for optimizer in stateDict["optimizers"].keys():
-        if optimizer != "stats":
-            stateDict["optimizers"][optimizer]["Pdc"] = stateDict["optimizers"][optimizer]["Vmod"] * stateDict["optimizers"][optimizer]["Imod"]
-    # compute the stats
-    stateDict["inverters"]["stats"]["Vac"] = avgItems(stateDict["inverters"], "Vac")
-    stateDict["inverters"]["stats"]["Pac"] = sumItems(stateDict["inverters"], "Pac")
-    stateDict["inverters"]["stats"]["Eac"] = sumItems(stateDict["inverters"], "Eac")
-    Eday = sumItems(stateDict["inverters"], "Eday")
-    # only update Eday if it increases
-    if Eday > stateDict["inverters"]["stats"]["Eday"]:
-        stateDict["inverters"]["stats"]["Eday"] = Eday
-    stateDict["inverters"]["stats"]["Etot"] = sumItems(stateDict["inverters"], "Etot")
-    stateDict["inverters"]["stats"]["Temp"] = avgItems(stateDict["inverters"], "Temp")
-    stateDict["optimizers"]["stats"]["Temp"] = avgItems(stateDict["optimizers"], "Temp")
-    # zero current energy and power for devices when an event occurs
-    if len(inDict["events"]) != 0:
-        for inverter in stateDict["inverters"].keys():
-            stateDict["inverters"][inverter]["Eac"] = 0.0
-            stateDict["inverters"][inverter]["Pac"] = 0.0
-        for optimizer in stateDict["optimizers"].keys():
-            stateDict["optimizers"][optimizer]["Vmod"] = 0.0
-            stateDict["optimizers"][optimizer]["Vopt"] = 0.0
-            stateDict["optimizers"][optimizer]["Imod"] = 0.0
-    writeState(stateDict, outFileName)
+with in_file:
+    while True:
+        json_str = ""
+        # wait for data
+        while json_str == "":
+            time.sleep(0.1)
+            json_str = in_file.readline()
+        in_dict = json.loads(json_str)
+        # update the state values
+        state_dict["inverters"].update(in_dict["inverters"])
+        state_dict["optimizers"].update(in_dict["optimizers"])
+        # compute optimizer power
+        for optimizer in state_dict["optimizers"]:
+            if optimizer != "stats":
+                state_dict["optimizers"][optimizer]["Pdc"] = (
+                    state_dict["optimizers"][optimizer]["Vmod"]
+                    * state_dict["optimizers"][optimizer]["Imod"]
+                )
+        # compute the stats
+        state_dict["inverters"]["stats"]["Vac"] = avg_items(
+            state_dict["inverters"], "Vac"
+        )
+        state_dict["inverters"]["stats"]["Pac"] = sum_items(
+            state_dict["inverters"], "Pac"
+        )
+        state_dict["inverters"]["stats"]["Eac"] = sum_items(
+            state_dict["inverters"], "Eac"
+        )
+        Eday = sum_items(state_dict["inverters"], "Eday")
+        # only update Eday if it increases
+        state_dict["inverters"]["stats"]["Eday"] = max(
+            state_dict["inverters"]["stats"]["Eday"], Eday
+        )
+        state_dict["inverters"]["stats"]["Etot"] = sum_items(
+            state_dict["inverters"], "Etot"
+        )
+        state_dict["inverters"]["stats"]["Temp"] = avg_items(
+            state_dict["inverters"], "Temp"
+        )
+        state_dict["optimizers"]["stats"]["Temp"] = avg_items(
+            state_dict["optimizers"], "Temp"
+        )
+        # zero current energy and power for devices when an event occurs
+        if len(in_dict["events"]) != 0:
+            for inverter in state_dict["inverters"]:
+                state_dict["inverters"][inverter]["Eac"] = 0.0
+                state_dict["inverters"][inverter]["Pac"] = 0.0
+            for optimizer in state_dict["optimizers"]:
+                state_dict["optimizers"][optimizer]["Vmod"] = 0.0
+                state_dict["optimizers"][optimizer]["Vopt"] = 0.0
+                state_dict["optimizers"][optimizer]["Imod"] = 0.0
+        write_state(state_dict, out_file_name)

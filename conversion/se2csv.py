@@ -1,43 +1,103 @@
 #!/usr/bin/env python3
+"""Convert SolarEdge inverter performance monitoring data from JSON to CSV."""
 
-# Convert SolarEdge inverter performance monitoring data from JSON to CSV
-
-import json
 import argparse
+import contextlib
 import csv
+import json
+from pathlib import Path
 
-from common import unwrap_metricsDict
-
+from common import unwrap_metrics_dict
 
 if __name__ == "__main__":
 
-    def deprecated(s):
-        raise argparse.ArgumentTypeError("Deprecated option.")
+    def deprecated(_s):
+        """
+        Reject a deprecated command line option with an error.
 
-    parser = argparse.ArgumentParser(description='reads a file containing JSON performance data and outputs a separate comma delimited file for each device type (eg inverter, optimizer, battery) encountered that is suitable for input to a spreadsheet.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-a", dest="append", action="store_true", default=False, help="append to inverter and optimizer files")
-    parser.add_argument("-d", dest="delimeter", default=",", help="csv file delimiter")
-    parser.add_argument("-t", dest="headers", action="store_true", default=False, help="write column headers to csv files")
-    parser.add_argument("-p", dest="prefix", required=True, help="prefix for all csv filenames")
-    parser.add_argument("-i", type=deprecated, help="The -i option is deprecated, use -p \"csvFileNamePrefix\" instead")
-    parser.add_argument("-o", type=deprecated, help="The -o option is deprecated, use -p \"csvFileNamePrefix\" instead")
-    parser.add_argument("-e", type=deprecated, help="The -e option is deprecated, use -p \"csvFileNamePrefix\" instead")
-    parser.add_argument("infile", type=argparse.FileType('r'), default="-", nargs='?', help="File containing performance data in JSON format")
+        Raises:
+            argparse.ArgumentTypeError: Always, with the message
+                "Deprecated option.".
+        """
+        msg = "Deprecated option."
+        raise argparse.ArgumentTypeError(msg)
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read a file containing JSON performance data and output a "
+            "separate comma-delimited file for each device type (e.g. "
+            "inverter, optimizer, battery) encountered that is suitable for "
+            "input to a spreadsheet."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-a",
+        dest="append",
+        action="store_true",
+        default=False,
+        help="append to inverter and optimizer files",
+    )
+    parser.add_argument(
+        "-d", dest="delimiter", default=",", help="CSV file delimiter"
+    )
+    parser.add_argument(
+        "-t",
+        dest="headers",
+        action="store_true",
+        default=False,
+        help="write column headers to CSV files",
+    )
+    parser.add_argument(
+        "-p", dest="prefix", required=True, help="prefix for all CSV filenames"
+    )
+    parser.add_argument(
+        "-i",
+        type=deprecated,
+        help='The -i option is deprecated, use -p "csvFileNamePrefix" instead.',
+    )
+    parser.add_argument(
+        "-o",
+        type=deprecated,
+        help='The -o option is deprecated, use -p "csvFileNamePrefix" instead.',
+    )
+    parser.add_argument(
+        "-e",
+        type=deprecated,
+        help='The -e option is deprecated, use -p "csvFileNamePrefix" instead.',
+    )
+    parser.add_argument(
+        "infile",
+        type=argparse.FileType("r"),
+        default="-",
+        nargs="?",
+        help="file containing performance data in JSON format",
+    )
 
     args = parser.parse_args()
 
-    devsFile = {}
+    devs_file = {}
 
-    # process the data
-    for jsonStr in args.infile:
-        for baseName, devAttrs in sorted(unwrap_metricsDict(json.loads(jsonStr))):
-            devName, devId = baseName.split(".", 1)
-            if devName not in devsFile:
-                devsFileName = '{}.{}.csv'.format(args.prefix, devName)
-                itemNames = [ "__Identifier__"] + sorted(devAttrs.keys())
-                devsFile[devName] = csv.DictWriter(open(devsFileName, "a" if args.append else "w"), itemNames)
-                if args.headers:
-                    devsFile[devName].writeheader()
+    # process the data, and close the CSV files when we are done
+    with contextlib.ExitStack() as csv_files:
+        for json_str in args.infile:
+            for base_name, dev_attrs in sorted(
+                unwrap_metrics_dict(json.loads(json_str))
+            ):
+                dev_name, dev_id = base_name.split(".", 1)
+                if dev_name not in devs_file:
+                    devs_file_name = f"{args.prefix}.{dev_name}.csv"
+                    item_names = ["__Identifier__", *sorted(dev_attrs.keys())]
+                    devs_file[dev_name] = csv.DictWriter(
+                        csv_files.enter_context(
+                            Path(devs_file_name).open(
+                                "a" if args.append else "w"
+                            )
+                        ),
+                        item_names,
+                    )
+                    if args.headers:
+                        devs_file[dev_name].writeheader()
 
-            devAttrs["__Identifier__"] = devId
-            devsFile[devName].writerow(devAttrs)
+                dev_attrs["__Identifier__"] = dev_id
+                devs_file[dev_name].writerow(dev_attrs)
