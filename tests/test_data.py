@@ -759,7 +759,6 @@ def test_sleep_event_has_a_time_zone_offset_and_an_end_time():
     }
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #35")
 def test_event_ignores_trailing_bytes():
     values = {0: STAMP, 1: 0, 2: STAMP, 3: STAMP, 4: 0}
     data = pack_fields(se.dataparams.EVENT_IN_FMT, values) + (b"\x00" * 4)
