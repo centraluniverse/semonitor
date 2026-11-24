@@ -134,7 +134,6 @@ words:
   - derivn
   - devlen
   - eofs
-  - filebuffersize
   - lastwrite
   - lcnt
   - lreport
