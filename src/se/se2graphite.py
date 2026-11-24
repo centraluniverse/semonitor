@@ -82,7 +82,7 @@ def send_metrics(graphite_socket, base, base_name, dev_attrs, delay):
                     )
                     graphite_socket.send(metric.encode())
                     time.sleep(delay)
-            except ValueError:
+            except TypeError, ValueError:
                 # It's not a numeric metric, ignore it
                 pass
 

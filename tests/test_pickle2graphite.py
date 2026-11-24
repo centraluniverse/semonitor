@@ -143,10 +143,8 @@ def test_every_numeric_attribute_of_every_device_is_added(pickle2graphite):
         {"Name": "text"},
         {"Undeciphered_data": "53 6f 6c"},
         {"Pac": float("nan")},
-        pytest.param(
-            {"Pac": None},
-            marks=pytest.mark.xfail(strict=True, reason="Issue #24"),
-        ),
+        {"Pac": None},
+        {"List": [1]},
     ],
 )
 def test_attributes_that_are_not_numbers_are_left_out(pickle2graphite, attrs):

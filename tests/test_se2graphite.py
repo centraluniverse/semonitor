@@ -182,14 +182,8 @@ def test_the_base_is_prepended_with_a_dot(monkeypatch):
         {"Name": ""},
         {"Undeciphered_data": "53 6f 6c"},
         {"Pac": float("nan")},
-        pytest.param(
-            {"Flag": None},
-            marks=pytest.mark.xfail(strict=True, reason="Issue #24"),
-        ),
-        pytest.param(
-            {"List": [1]},
-            marks=pytest.mark.xfail(strict=True, reason="Issue #24"),
-        ),
+        {"Flag": None},
+        {"List": [1]},
     ],
 )
 def test_attributes_that_are_not_numbers_are_not_sent(monkeypatch, attrs):

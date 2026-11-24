@@ -144,7 +144,7 @@ class Pickle2Graphite(list):
                                     (time_stamp, str(dev_attrs[dev_attr])),
                                 )
                             )
-                    except ValueError:
+                    except TypeError, ValueError:
                         # It is not a numeric metric
                         pass
 
