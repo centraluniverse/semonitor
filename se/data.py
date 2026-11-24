@@ -16,6 +16,7 @@ from se.datadevices import ParseDevice, merge_update
 from se.dataparams import (
     EVENT_IDX,
     EVENT_IN_FMT,
+    EVENT_IN_FMT_LEN,
     EVENT_ITEMS,
     INV_3PH_IDX,
     INV_3PH_IN_FMT,
@@ -448,7 +449,7 @@ def parse_event_data(se_id, event_items, dev_data):
     """
     # unpack data and map to items
     se_event_data = [
-        struct.unpack(EVENT_IN_FMT, dev_data[:INV_IN_FMT_LEN])[i]
+        struct.unpack(EVENT_IN_FMT, dev_data[:EVENT_IN_FMT_LEN])[i]
         for i in EVENT_IDX
     ]
     se_event_data[2] = format_date_time(se_event_data[2])
