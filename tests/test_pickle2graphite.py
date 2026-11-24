@@ -179,6 +179,24 @@ def test_a_missing_time_is_logged_and_replaced_by_the_epoch(env, monkeypatch):
     assert "Date or Time" in env.syslog[0]
 
 
+def test_a_badly_formatted_date_is_logged_and_replaced_by_the_epoch(
+    env, monkeypatch
+):
+    namespace = load(monkeypatch)
+
+    batch = namespace["Pickle2Graphite"](
+        {
+            "inverters": {
+                "I1": {"Date": "01/02/2016", "Time": "12:00:00", "Pac": 1}
+            }
+        },
+        base="",
+    )
+
+    assert batch == [("inverters.I1.Pac", (61.0, "1"))]
+    assert "Date or Time" in env.syslog[0]
+
+
 def test_nothing_in_gives_an_empty_batch(pickle2graphite):
     assert pickle2graphite({}, base="") == []
     assert pickle2graphite({"inverters": {}}, base="") == []

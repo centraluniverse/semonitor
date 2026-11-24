@@ -294,7 +294,6 @@ def test_a_missing_time_is_logged_and_replaced_by_the_epoch(env, monkeypatch):
     assert metrics(connection) == [("inverters.I1.Pac", "1", 61.0)]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #25")
 def test_a_badly_formatted_date_is_logged_not_fatal(env, monkeypatch):
     stdin = line(
         inverters={"I1": {"Date": "01/02/2016", "Time": "12:00:00", "Pac": 1}}

@@ -101,7 +101,7 @@ class Pickle2Graphite(list):
             try:
                 (year, month, day) = dev_attrs["Date"].split("-")
                 (hour, minute, second) = dev_attrs["Time"].split(":")
-            except KeyError:
+            except KeyError, ValueError:
                 log(
                     "Date or Time is missing or incorrectly formatted for this set of metrics"
                 )
