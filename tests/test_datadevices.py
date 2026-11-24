@@ -638,15 +638,17 @@ def test_battery_with_trailing_bytes_keeps_them_as_hex(record):
 
 @pytest.mark.parametrize("record", BATTERIES)
 def test_trailing_bytes_become_a_part_of_the_battery_definition(record):
-    ParseDevice(resized(record, payload_of(record) + b"\x01"))
+    class_len = sum(item[0] for item in ParseDevice0x0030.field_defs)
 
-    assert ParseDevice0x0030.item_names()[-1] == "Undeciphered_data"
-    assert sum(item[0] for item in ParseDevice0x0030.field_defs) == (  # idem
-        len(payload_of(record)) + 1
+    dev = ParseDevice(resized(record, payload_of(record) + b"\x01"))
+
+    assert dev.field_defs[-1][2] == "Undeciphered_data"
+    assert (
+        sum(item[0] for item in dev.field_defs) == len(payload_of(record)) + 1
     )
+    assert sum(item[0] for item in ParseDevice0x0030.field_defs) == class_len
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #34")
 @pytest.mark.parametrize("record", BATTERIES)
 def test_battery_longer_than_defined_does_not_break_the_next_normal_one(
     record,
