@@ -62,14 +62,12 @@ class Handler:
 # --- set up ------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_the_log_directory_is_created_when_it_does_not_exist(workdir, load):
     load()
 
     assert (workdir / "logFiles").is_dir()
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_an_existing_log_directory_and_log_are_kept(workdir, load):
     (workdir / "logFiles").mkdir()
     (workdir / "logFiles" / "syslog.log").write_text("earlier message\n")
@@ -80,14 +78,12 @@ def test_an_existing_log_directory_and_log_are_kept(workdir, load):
     assert log_text(workdir) == "earlier message\nnew message\n"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_the_log_file_is_in_the_log_directory(load):
     namespace = load()
 
     assert namespace["LOG_FILE"] == f"{namespace['LOG_DIR']}/syslog.log"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_the_server_listens_on_the_syslog_port_on_localhost(load):
     namespace = load()
 
@@ -98,7 +94,6 @@ def test_the_server_listens_on_the_syslog_port_on_localhost(load):
 # --- handler -----------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_a_message_is_logged_to_the_file_as_it_was_received(workdir, load):
     namespace = load()
 
@@ -109,7 +104,6 @@ def test_a_message_is_logged_to_the_file_as_it_was_received(workdir, load):
     assert log_text(workdir) == "<13>Jan  1 12:00:00 host app: hello\n"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_messages_are_appended_in_order(workdir, load):
     namespace = load()
 
@@ -119,7 +113,6 @@ def test_messages_are_appended_in_order(workdir, load):
     assert log_text(workdir).splitlines() == ["one", "two", "three"]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_surrounding_whitespace_is_removed(workdir, load):
     namespace = load()
 
@@ -151,7 +144,6 @@ def test_a_message_that_is_not_valid_utf8_is_still_logged(workdir, load):
     assert "broken" in log_text(workdir)
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_an_empty_message_does_not_break_the_handler(workdir, load):
     namespace = load()
 
@@ -160,7 +152,6 @@ def test_an_empty_message_does_not_break_the_handler(workdir, load):
     assert log_text(workdir) == "\n"
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_the_handler_is_a_datagram_request_handler(load):
     namespace = load()
 
@@ -196,7 +187,6 @@ def fake_server(monkeypatch):
     return FakeServer
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_main_serves_the_handler_on_the_configured_address(load, fake_server):
     namespace = load("__main__")
 
@@ -206,7 +196,6 @@ def test_main_serves_the_handler_on_the_configured_address(load, fake_server):
     assert server.poll_interval == 0.5
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_importing_does_not_start_a_server(load, fake_server):
     load("tiny_syslog_server")
 
@@ -222,7 +211,6 @@ def test_control_c_stops_the_server_with_a_message(load, fake_server, capsys):
     assert "Shutting down" in capsys.readouterr().out
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 @pytest.mark.parametrize(
     "error", [PermissionError("port 514"), OSError("in use")]
 )
@@ -236,7 +224,6 @@ def test_failing_to_bind_is_not_hidden(load, monkeypatch, error):
         load("__main__")
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #17")
 def test_a_system_exit_is_passed_on(load, fake_server):
     fake_server.action = SystemExit(3)
 
