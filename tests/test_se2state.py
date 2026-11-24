@@ -149,7 +149,6 @@ def test_without_initializing_an_existing_state_is_continued(
     )
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #18")
 def test_without_initializing_a_missing_state_is_started_empty(
     workdir, monkeypatch
 ):
