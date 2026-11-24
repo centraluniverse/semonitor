@@ -10,10 +10,9 @@ Originally sourced from the gist at https://gist.github.com/marcelom/4218010
 """
 
 import logging
+import socketserver
 import sys
 from pathlib import Path
-
-import SocketServer
 
 LOG_DIR = "logFiles"
 LOG_FILE = f"{LOG_DIR}/syslog.log"
@@ -36,7 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class SyslogUDPHandler(SocketServer.BaseRequestHandler):
+class SyslogUDPHandler(socketserver.BaseRequestHandler):
     """Handle a UDP syslog message by logging it to the log file."""
 
     def handle(self):
@@ -48,7 +47,7 @@ class SyslogUDPHandler(SocketServer.BaseRequestHandler):
 
 if __name__ == "__main__":
     try:
-        server = SocketServer.UDPServer((HOST, PORT), SyslogUDPHandler)
+        server = socketserver.UDPServer((HOST, PORT), SyslogUDPHandler)
         server.serve_forever(poll_interval=0.5)
     except OSError, SystemExit:
         raise
