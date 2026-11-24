@@ -406,7 +406,6 @@ def test_a_missing_base_directory_is_an_error_not_silently_ignored(se2file):
 # --- debug -------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_debug_shows_the_data_that_is_received(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
@@ -423,7 +422,6 @@ def test_without_debug_nothing_is_printed(workdir, se2file, capsys):
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #16")
 def test_debug_shows_a_new_file_name(workdir, se2file, capsys):
     (workdir / "out").mkdir()
 
@@ -432,7 +430,6 @@ def test_debug_shows_a_new_file_name(workdir, se2file, capsys):
     assert "solardata_2016-01-01-12.json" in capsys.readouterr().out
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #32")
 def test_debug_reports_the_loop_count_with_a_readable_time(
     workdir, se2file, capsys
 ):

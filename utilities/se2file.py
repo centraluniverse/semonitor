@@ -90,11 +90,11 @@ def main():
             if json_str != "":
                 blank_cnt = 0  # If we have data, reset the blank_cnt variable
                 if debug:
-                    sys.stderr.write(f"Got some data: {json_str}\n")
+                    sys.stdout.write(f"Got some data: {json_str}\n")
                 tfname = _output_path(args, dt.datetime.now().astimezone())
                 if tfname != writefilename:
                     if debug:
-                        sys.stderr.write(
+                        sys.stdout.write(
                             "Looks like a new daily output file: "
                             f"Temp Name: {tfname} - Old Name: {writefilename}\n"
                         )
@@ -110,7 +110,7 @@ def main():
                 time.sleep(0.5)
             # Let's not leave output files open if we haven't seen data in a while  # noqa: W505
             if curepoch - lastwrite > openfilesecs and debug:
-                sys.stderr.write(
+                sys.stdout.write(
                     f"No data for {openfilesecs} seconds, closing file\n"
                 )
             # Keep track of when we are looping and report on it if debug is enabled.  # noqa: W505
@@ -119,8 +119,10 @@ def main():
                 lcnt = 0
                 if debug:
                     curtime = dt.datetime.now().astimezone()
-                    curstr = curtime.strftime("%Y-%m-%d-%H:%m:%s")
-                    sys.stderr.write(f"Looped {lreport} times at {curstr}\n")
+                    curstr = curtime.strftime("%Y-%m-%d-%H:%M:%S")
+                    sys.stdout.write(
+                        f"We've looped {lreport} times at {curstr}\n"
+                    )
 
 
 def getargs():
