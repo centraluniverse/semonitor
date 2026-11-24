@@ -89,7 +89,6 @@ def line(inverters=None, optimizers=None, events=None):
 # --- initializing ------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #19")
 def test_initializing_writes_a_zeroed_state_before_any_input(
     workdir, monkeypatch
 ):

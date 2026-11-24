@@ -55,6 +55,25 @@ def avg_items(item_dict, item_attr):
         return 0
 
 
+def zeroed_state(inverters=()):
+    """Return a state with zeroed statistics, and zeroed inverters if given."""
+    stats = {
+        "Vac": 0.0,
+        "Pac": 0.0,
+        "Eac": 0.0,
+        "Eday": 0.0,
+        "Etot": 0.0,
+        "Temp": 0.0,
+    }
+    state_dict = {
+        "inverters": {"stats": dict(stats)},
+        "optimizers": {"stats": {"Temp": 0.0}},
+    }
+    for inverter in inverters:
+        state_dict["inverters"][inverter] = dict(stats)
+    return state_dict
+
+
 def write_state(state_dict, out_file_name):
     """Write the state dictionary to the state file as JSON."""
     with Path(out_file_name).open("w") as out_file:
@@ -73,29 +92,7 @@ for opt in opts:
 
 # initialize the state dictionary
 if initialize:
-    # zero the statistics
-    state_dict = {
-        "inverters": {
-            "stats": {
-                "Vac": 0.0,
-                "Pac": 0.0,
-                "Eac": 0.0,
-                "Eday": 0.0,
-                "Etot": 0.0,
-                "Temp": 0.0,
-            }
-        },
-        "optimizers": {"stats": {"Temp": 0.0}},
-    }
-    for inverter in inverters:
-        state_dict["inverters"]["stats"][inverter] = {
-            "Vac": 0.0,
-            "Pac": 0.0,
-            "Eac": 0.0,
-            "Eday": 0.0,
-            "Etot": 0.0,
-            "Temp": 0.0,
-        }
+    state_dict = zeroed_state(inverters)
     write_state(state_dict, out_file_name)
 else:
     # start with values from the file if it exists
@@ -104,19 +101,7 @@ else:
             state_dict = json.load(state_file)
     except OSError:
         # Without a state file, start from zeroed statistics
-        state_dict = {
-            "inverters": {
-                "stats": {
-                    "Vac": 0.0,
-                    "Pac": 0.0,
-                    "Eac": 0.0,
-                    "Eday": 0.0,
-                    "Etot": 0.0,
-                    "Temp": 0.0,
-                }
-            },
-            "optimizers": {"stats": {"Temp": 0.0}},
-        }
+        state_dict = zeroed_state()
 
 # read the input forever
 with in_file:
