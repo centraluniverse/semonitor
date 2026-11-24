@@ -378,7 +378,9 @@ class ParseDevice(dict):
         if self.field_defs_len < dev_len:
             # By default, convert any remaining undefined bytes to their
             # representation as a hexadecimal string.
-            self.field_defs.append(
+            # a copy for this device only: the class definition is shared
+            self.field_defs = [
+                *self.field_defs,
                 [
                     dev_len - self.field_defs_len,
                     "hex",
@@ -386,8 +388,8 @@ class ParseDevice(dict):
                     self.hex_data,
                     True,
                     "unknown as yet",
-                ]
-            )
+                ],
+            ]
 
         for (
             param_len,
