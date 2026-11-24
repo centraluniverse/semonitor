@@ -1,123 +1,214 @@
 #!/usr/bin/env python3
+"""Write the output of semonitor.py, unprocessed, to JSON files."""
 
-import time
-import os
-import sys
-import datetime
-from collections import OrderedDict
 import argparse
+import contextlib
+import datetime as dt
+import sys
+import time
+from pathlib import Path
+
+
+def _open_input(args, files):
+    """
+    Open the file to read from, which stays open until files is closed.
+
+    Args:
+        args: The parsed command line arguments, infile names the input.
+        files: The ExitStack that keeps the file open until it is closed.
+
+    Returns:
+        sys.stdin when the input is "stdin", else the open file.
+
+    Raises:
+        SystemExit: With status 1 if the file cannot be opened.
+    """
+    if args.infile == "stdin":
+        return sys.stdin
+    try:
+        return files.enter_context(Path(args.infile).open())
+    except OSError:
+        sys.stderr.write(f"We could not open {args.infile}. Exiting\n")
+        raise SystemExit(1) from None
+
+
+def _output_path(args, curtime):
+    """
+    Return the path of the JSON file to write the message at curtime to.
+
+    The file is named after the day, or the hour, of curtime. A directory per
+    day is created under basedir when make_daily_dir is set.
+
+    Args:
+        args: The parsed command line arguments.
+        curtime: The time the message was received.
+
+    Returns:
+        The path of the JSON file.
+    """
+    curday = curtime.strftime("%Y-%m-%d")
+    curhour = curtime.strftime("%Y-%m-%d-%H")
+    curstore = curday if args.store_daily else curhour
+    if args.make_daily_dir:
+        Path(args.basedir, curday).mkdir(exist_ok=True)
+        return (
+            args.basedir + "/" + curday + "/" + args.prefix + curstore + ".json"
+        )
+    return args.basedir + "/" + args.prefix + curstore + ".json"
+
 
 def main():
-# state values
+    """Copy semonitor output lines into JSON files named by day and hour."""
+    # parse the command line arguments
     args = getargs()
 
-    blank_max = 10 # Since we want to work on files and std in. We will count the number of lines that are blank. If we process 100 blank lines and we are not doing stdin, we will assume that the file is done
-    basedir = args.basedir
+    # Since we want to work on files and stdin. We will count the number of
+    # lines that are blank. If we process 10 blank lines and we are not doing
+    # stdin, we will assume that the file is done
+    blank_max = 10
     debug = args.debug
-    prefix = args.prefix
     openfilesecs = int(args.openfilesecs)
-    store_daily = args.store_daily
-    make_daily_dir = args.make_daily_dir
-    looper = args.looper
-    if args.infile == "stdin":
-        inFile = sys.stdin
-    else:
-        try:
-            inFile = open(args.infile, "r")
-        except:
-            print("We could not open %s. Exiting" % ars.infile)
-            sys.exit(1)
-        # We always set looper = False for files, even if the args set it to true. 
-        looper = False
+    # We always set looper = False for files, even if the args set it to true.
+    looper = args.looper and args.infile == "stdin"
+    with contextlib.ExitStack() as files:
+        in_file = _open_input(args, files)
 
-    lastwrite = 0
-# read the input forever or until we have 100 blank lines in the case of file as input
-    writefile = None
-    writefilename = ""
-    jsonStr = ""
-    lcnt = 0
-    filebuffersize = 0
-    blank_cnt = 0
-    while looper or blank_cnt <= blank_max: # If stdin is set, the blank_cnt will be ignored
-        lcnt += 1
-        jsonStr = inFile.readline().strip()
-        curepoch = int(time.time())
-    # wait for and handle data coming in
-        if jsonStr != "":
-            blank_cnt = 0 # If we have data, reset the blank_cnt variable
-            if debug:
-                print("Got some data: %s" % jsonStr)
-            curtime = datetime.datetime.now()
-            curday = curtime.strftime("%Y-%m-%d")
-            curhour = curtime.strftime("%Y-%m-%d-%H")
-            if store_daily == True:
-                curstore = curday
-            else:
-                curstore = curhour
-            if make_daily_dir == True:
-                if not os.path.isdir(basedir + "/" + curday):
-                    os.mkdir(basedir + "/" + curday)
-                tfname = basedir + "/" + curday + "/" + prefix + curstore + ".json"
-            else:
-                tfname = basedir + "/" + prefix + curstore + ".json"
-            if tfname != writefilename:
+        lastwrite = 0
+        # read the input forever or until we have 10 blank lines in the case of
+        # file as input
+        writefilename = ""
+        json_str = ""
+        lcnt = 0
+        blank_cnt = 0
+        while (
+            looper or blank_cnt <= blank_max
+        ):  # If stdin is set, the blank_cnt will be ignored
+            lcnt += 1
+            json_str = in_file.readline().strip()
+            curepoch = int(time.time())
+            # wait for and handle data coming in
+            if json_str != "":
+                blank_cnt = 0  # If we have data, reset the blank_cnt variable
                 if debug:
-                    print("Looks like a new day: Temp Name: %s - Old Name: %s" % (tfname, writefilename))
-                if writefile is not None:
-                    writefile.close()
-                    writefile = None
-                writefilename = tfname
+                    sys.stdout.write(f"Got some data: {json_str}\n")
+                tfname = _output_path(args, dt.datetime.now().astimezone())
+                if tfname != writefilename:
+                    if debug:
+                        sys.stdout.write(
+                            "Looks like a new daily output file: "
+                            f"Temp Name: {tfname} - Old Name: {writefilename}\n"
+                        )
+                    writefilename = tfname
 
-            if writefile is None:
-                writefile  = open(writefilename, "a",  buffering=filebuffersize)
-            writefile.write(jsonStr + "\n")
-            lastwrite = curepoch
-            writefile.close()
-            writefile = None
-            jsonStr = ""
-        else:
-            blank_cnt += 1
-            time.sleep(0.5)
-     # Let's not leave output files open if we haven't seen data in a while
-        if curepoch - lastwrite > openfilesecs:
-            if debug:
-                print("Well it's been %s seconds, closing file" % openfilesecs)
-            if writefile is not None:
-                writefile.close()
-                writefile = None
-        # Keep track of when we are looping and report on it of debug is enabled.
-        lreport = 60
-        if lcnt % lreport == 0:
-            lcnt = 0
-            if debug:
-                curtime = datetime.datetime.now()
-                curstr = curtime.strftime("%Y-%m-%d-%H:%m:%s")
-                print("We've looped %s times at %s" % (lreport, curstr))
-
+                # The file is closed again right away, so we never keep it open
+                with Path(writefilename).open("a") as writefile:
+                    writefile.write(json_str + "\n")
+                lastwrite = curepoch
+                json_str = ""
+            else:
+                blank_cnt += 1
+                time.sleep(0.5)
+            # Let's not leave output files open if we haven't seen data in a while  # noqa: W505
+            if curepoch - lastwrite > openfilesecs and debug:
+                sys.stdout.write(
+                    f"No data for {openfilesecs} seconds, closing file\n"
+                )
+            # Keep track of when we are looping and report on it if debug is enabled.  # noqa: W505
+            lreport = 60
+            if lcnt % lreport == 0:
+                lcnt = 0
+                if debug:
+                    curtime = dt.datetime.now().astimezone()
+                    curstr = curtime.strftime("%Y-%m-%d-%H:%M:%S")
+                    sys.stdout.write(
+                        f"We've looped {lreport} times at {curstr}\n"
+                    )
 
 
 def getargs():
-    parser = argparse.ArgumentParser(description='Takes output from semonitor.py and puts all output into json files based on the day and hour that the message was recieve. No processing is done, messages in from semonitor.py direct to files.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-v", dest="debug", action="store_true",  default=False, help="Turn on very verbose debug messages")
-    parser.add_argument("-b", dest="basedir", required=True, help="This is the base directory to put files into (Required)")
-    parser.add_argument("-p", dest="prefix", default="solardata_", help="prefix for all csv filenames (defaults to 'solardata_')")
-    parser.add_argument("-d", dest="store_daily", default=False, action="store_true", help="Instead of using Hourly files (YYYY-MM-DD-hh) store in daily files (YYYY-MM-DD) - Results in larger files. Default is False (Use Hourly)")
-    parser.add_argument("-t", dest="openfilesecs", default="120", help="If no data added to open outputfiles in this many seconds, then close them and wait for more data. Defaults to 120 seconds")
-    parser.add_argument("-w", dest="looper", default=False, action="store_true", help="Wait forever on stdin. This only applies when -s is not set or set to stdin. It will wait forever on listening to stdin. Use this to wait for long running processes. If this is not set, after 10 attempts to read from stdin, it will exit gracefully. This is the default so you can cat files to this, and have it return. If you are running this as part of a semonitor.py process that is live, then set -w so it can go a long time without input and not close")
-    parser.add_argument("-m", dest="make_daily_dir", default=False, action="store_true", help="Create a use a directory in the format YYYY-MM-DD for each day of files. Otherwise all files will be in the root of the -b argument")
-    parser.add_argument("infile", default="stdin", nargs='?', help="File to process. The Default of stdin is used to pipe data to this script. Otherwise it will just process a single file (provided by -s) and exit)")
+    """
+    Parse the command line arguments.
+
+    Returns:
+        The parsed command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Write the output of semonitor.py, unprocessed, to JSON files "
+            "named after the day and hour in which each message was received."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-v",
+        dest="debug",
+        action="store_true",
+        default=False,
+        help="turn on very verbose debug messages",
+    )
+    parser.add_argument(
+        "-b",
+        dest="basedir",
+        required=True,
+        help="base directory to put the files into (required)",
+    )
+    parser.add_argument(
+        "-p",
+        dest="prefix",
+        default="solardata_",
+        help="prefix for all JSON filenames",
+    )
+    parser.add_argument(
+        "-d",
+        dest="store_daily",
+        default=False,
+        action="store_true",
+        help="Store daily files (YYYY-MM-DD) instead of hourly files (YYYY-MM-DD-hh); results in larger files.",
+    )
+    parser.add_argument(
+        "-t",
+        dest="openfilesecs",
+        default="120",
+        help="Close the open output files after this many seconds without new data, and wait for more data.",
+    )
+    parser.add_argument(
+        "-w",
+        dest="looper",
+        default=False,
+        action="store_true",
+        help=(
+            "Wait forever for data on stdin, e.g. for a live semonitor.py; "
+            "only applies when infile is stdin; without it, exit gracefully "
+            "after 10 failed reads from stdin, so that piping in a file with "
+            "cat returns."
+        ),
+    )
+    parser.add_argument(
+        "-m",
+        dest="make_daily_dir",
+        default=False,
+        action="store_true",
+        help=(
+            "Create a directory per day (YYYY-MM-DD) for the files; "
+            "otherwise all files go into the base directory (-b)."
+        ),
+    )
+    parser.add_argument(
+        "infile",
+        default="stdin",
+        nargs="?",
+        help="File to process, then exit; the default, stdin, reads piped data.",
+    )
 
     defargs = parser.parse_args()
-    if defargs.looper == True and defargs.infile != "stdin": 
-        print("Warning: You have set wait forever (-w) on a infile that is not stdin, we will NOT wait forever")
+    if defargs.looper and defargs.infile != "stdin":
+        sys.stderr.write(
+            "Warning: wait forever (-w) only applies to stdin, "
+            "not waiting for more data from the infile\n"
+        )
 
     return defargs
 
 
-
- 
-
-
 if __name__ == "__main__":
     main()
-
