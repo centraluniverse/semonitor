@@ -134,7 +134,6 @@ def test_the_message_is_shown_with_the_address_of_the_sender(load, capsys):
     assert "5140" not in out
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #84")
 def test_a_message_that_is_not_valid_utf8_is_still_logged(workdir, load):
     namespace = load()
 

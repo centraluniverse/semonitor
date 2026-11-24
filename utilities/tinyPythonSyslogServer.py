@@ -40,7 +40,7 @@ class SyslogUDPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         """Log the received message, and show it with the sender's address."""
-        data = bytes.decode(self.request[0].strip())
+        data = bytes.decode(self.request[0].strip(), errors="replace")
         sys.stderr.write(f"{self.client_address[0]} :  {data}\n")
         logger.info(str(data))
 
