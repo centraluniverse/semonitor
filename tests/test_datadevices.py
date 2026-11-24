@@ -1066,7 +1066,6 @@ def test_explorer_item_is_wrapped_by_its_type(record):
     assert list(wrapped["explore_0x0018"].values()) == [dev]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #43")
 @pytest.mark.parametrize("record", UNKNOWN)
 def test_explorer_item_is_wrapped_by_the_same_id_as_other_devices(record):
     explored = ParseDevice(record, explorer=True)
