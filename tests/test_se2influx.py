@@ -682,7 +682,6 @@ def test_the_archive_is_named_after_the_log_with_the_time_before_the_extension(
     assert log.read_text() == ""
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #28")
 @pytest.mark.usefixtures("fixed_now")
 def test_a_dot_in_the_directory_is_not_taken_for_an_extension(make, workdir):
     directory = workdir / "var.log.d"

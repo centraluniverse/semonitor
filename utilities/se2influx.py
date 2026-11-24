@@ -322,12 +322,13 @@ class Se2Influx:
     def rotate_log(self) -> None:
         """Rotate and compress logs once they get too big."""
         ts = datetime.now().astimezone().strftime("%Y%m%d%H%M%S")
-        log_root, sep, log_ext = self.log_path.rpartition(".")
+        log_file = Path(self.log_path)
+        log_root, sep, log_ext = log_file.name.rpartition(".")
         if not log_root:
             log_root = log_ext
             log_ext = ""
 
-        gz_log = f"{log_root}-{ts}{sep}{log_ext}.gz"
+        gz_log = log_file.with_name(f"{log_root}-{ts}{sep}{log_ext}.gz")
 
         with (
             Path(self.log_path).open("rb") as f_in,
