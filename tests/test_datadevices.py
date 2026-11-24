@@ -1261,23 +1261,7 @@ def test_merge_of_a_repeated_device_updates_its_changed_fields(record, caplog):
     ]
 
 
-@pytest.mark.parametrize(
-    "record",
-    [
-        param
-        if param.id
-        in (
-            "Geoff99.190801.1135.test-rec5-2",
-            "Geoff99.190801.1135.test-rec5-7",
-        )
-        else pytest.param(
-            *param.values,
-            id=param.id,
-            marks=pytest.mark.xfail(strict=True, reason="Issue #44"),
-        )
-        for param in METERS
-    ],
-)
+@pytest.mark.parametrize("record", METERS)
 def test_merge_of_the_same_record_again_is_silent_even_with_nan(record, caplog):
     master = {}
     merge_update(master, ParseDevice(record).wrap_in_ids())

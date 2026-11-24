@@ -39,6 +39,7 @@ sorts, to examining the relevant part of the pcap file using a hex editor.
 
 import binascii
 import logging
+import math
 import struct
 import time
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -1228,6 +1229,11 @@ a step towards deciphering a new se_type block, and creating a more sensible par
         return "\n".join(msg)
 
 
+def _is_nan(value):
+    """Return whether value is a float nan, which never compares equal."""
+    return isinstance(value, float) and math.isnan(value)
+
+
 def merge_update(dict1, dict2):
     """
     Merge only the new elements of a nested dict2 into the master dict1.
@@ -1250,6 +1256,10 @@ def merge_update(dict1, dict2):
             # We have a duplicated value being reported by se. I presume it is
             # an updated value.
             pass
+        elif _is_nan(dict1[k2]) and _is_nan(v2):
+            # A repeated nan is a duplicated value too, and nan never compares
+            # equal. Keep the new object, without a warning.
+            dict1[k2] = v2
         else:
             # We have reached the bottom of the dictionary of dictionaries
             # structure and still have no NEW identifier keys. So it looks like
