@@ -331,6 +331,8 @@ def get_args():
     """
     parser = _make_parser()
     args = parser.parse_args()
+    if not args.logfile:
+        parser.error("The log destination must not be empty")
     _configure_logging(args)
     serial_device = _is_serial_device(args)
     _validate_serial(parser, args, serial_device=serial_device)

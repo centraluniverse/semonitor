@@ -383,11 +383,10 @@ def test_log_file_is_appended_to_after_the_old_content(get_args, workdir):
     assert len(lines) > 1
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #40")
 def test_empty_log_destination_is_a_usage_error(usage_error):
     message = usage_error("-d", "")
 
-    assert message
+    assert "The log destination must not be empty" in message
 
 
 @pytest.mark.parametrize(
@@ -730,9 +729,8 @@ def test_invalid_serial_combinations_are_usage_errors(
         pytest.param(["-c", "0a"], ONE_SLAVE, id="command"),
         pytest.param(
             ["-d", ""],
-            "",
+            "The log destination must not be empty",
             id="empty-log-destination",
-            marks=pytest.mark.xfail(strict=True, reason="Issue #40"),
         ),
     ],
 )
