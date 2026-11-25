@@ -202,7 +202,7 @@ def _configure_logging(args):
     elif args.logfile == "stdout":
         handler = logging.StreamHandler(stream=sys.stdout)
         handler.setFormatter(stream_formatter)
-    elif args.logfile:
+    else:
         handler = logging.FileHandler(
             args.logfile, mode="a" if args.append else "w"
         )
