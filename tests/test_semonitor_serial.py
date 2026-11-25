@@ -534,15 +534,7 @@ def with_the_magic_in_the_data(recording):
     )
 
 
-@pytest.mark.parametrize(
-    "tty_type",
-    [
-        pytest.param(
-            "4", marks=pytest.mark.xfail(strict=True, reason="Issue #60")
-        ),
-        "2",
-    ],
-)
+@pytest.mark.parametrize("tty_type", ["4", "2"])
 def test_a_frame_with_the_magic_in_its_data_is_one_frame(
     serial_run, recording, tty_type
 ):

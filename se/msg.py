@@ -9,6 +9,7 @@ import logging
 import struct
 import time
 import weakref
+from collections import deque
 from typing import NamedTuple
 
 import se.logutils
@@ -59,9 +60,6 @@ def read_msg(in_file, rec_file, mode, state):
     Seq.data_in += 1
     if mode.serial_type == "2":
         (msg, eof) = read_rs232_frame(in_file, rec_file, mode, state)
-    elif in_file in _pending:
-        # a frame that followed the previous one without a magic number
-        (msg, eof) = _pending.pop(in_file)
     else:
         (msg, eof) = scan_msg(in_file, rec_file, mode, state)
     if len(msg) > 0:  # don't log zero length messages
@@ -105,11 +103,76 @@ def read_rs232_frame(in_file, rec_file, mode, state):
 
 def scan_msg(in_file, rec_file, mode, state):
     """
-    Read the bytes up to the next magic number, for RS485, a file or stdin.
+    Read the next message for RS485, a file or stdin.
+
+    The input is split at the magic numbers. When the header of a message
+    gives a longer frame, the magic numbers in its data are joined again,
+    and the frame is only kept when its length and checksum confirm it. A
+    message that is not confirmed is split as it is.
 
     Returns:
-        A tuple (msg, eof), as for read_msg. A second frame that follows the
-        message without a magic number is kept for the next read.
+        A tuple (msg, eof), as for read_msg.
+    """
+    queue = _pending.pop(in_file, deque())  # segments read ahead
+    if not queue:
+        queue.append(scan_segment(in_file, rec_file, mode, state))
+
+    def read_next():
+        return scan_segment(in_file, rec_file, mode, state)
+
+    (msg, eof) = queue[0]
+    length = header_length(msg)
+    frame = None
+    if length is not None and len(msg) < length and not eof:
+        frame = join_frame(queue, length, read_next)
+    if frame is not None:
+        (msg, eof) = frame
+    else:
+        queue.popleft()
+        (msg, rest) = split_frame(msg)
+        if rest:  # keep the frame that follows, it is returned next
+            queue.appendleft((rest, eof))
+            eof = False
+    if queue:
+        _pending[in_file] = queue
+    return (msg, eof)
+
+
+def join_frame(queue, length, read_next):
+    """
+    Join segments of the input into one frame of the given length.
+
+    The segments are taken from the queue, and read when it runs out, until
+    their joined length reaches the length of the frame. The frame is kept
+    only if its checksum is correct at that length. Otherwise the segments
+    stay in the queue. Bytes after the frame stay in the queue, as the start
+    of the next message.
+
+    Returns:
+        A tuple (frame, eof), as for read_msg, or None if no frame was found.
+    """
+    taken = [queue.popleft()]
+    joined = taken[0][0]
+    while len(joined) < length and not taken[-1][1]:
+        taken.append(queue.popleft() if queue else read_next())
+        joined += magic + taken[-1][0]
+    extra = len(joined) - length
+    if frame_length(joined) != length or extra > len(taken[-1][0]):
+        queue.extendleft(reversed(taken))
+        return None
+    last_eof = taken[-1][1]
+    if extra:  # bytes after the frame, the start of the next message
+        queue.appendleft((taken[-1][0][len(taken[-1][0]) - extra :], last_eof))
+        return (joined[:length], False)
+    return (joined[:length], last_eof)
+
+
+def scan_segment(in_file, rec_file, mode, state):
+    """
+    Read the bytes up to the next magic number, or the end of the input.
+
+    Returns:
+        A tuple (segment, eof), where segment is without the magic number.
     """
     msg = b""
     eof = False
@@ -121,16 +184,27 @@ def scan_msg(in_file, rec_file, mode, state):
             msg += magic  # append a magic number to end the loop
         else:
             msg += next_byte
-    msg = msg[:-MAGIC_LEN]  # strip the magic number from the end
-    (msg, rest) = split_frame(msg)
-    if rest:  # keep the frame that follows, it is returned next
-        _pending[in_file] = (rest, eof)
-        eof = False
-    return (msg, eof)
+    return (msg[:-MAGIC_LEN], eof)
 
 
-# frames that were read after a frame, without a magic number between them
+# segments that were read ahead, by input file, each as (bytes, eof)
 _pending = weakref.WeakKeyDictionary()
+
+
+def header_length(msg):
+    """
+    Return the length of the frame that the header of msg gives.
+
+    Returns:
+        The length including the checksum, or None if the header is too short
+        or its inverse length does not agree with its length.
+    """
+    if len(msg) < MSG_HDR_LEN:
+        return None
+    (data_len, data_len_inv) = struct.unpack("<HH", msg[:4])
+    if data_len != ~data_len_inv & 0xFFFF:
+        return None
+    return MSG_HDR_LEN + data_len + CHECKSUM_LEN
 
 
 def split_frame(msg):

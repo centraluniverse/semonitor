@@ -321,6 +321,48 @@ ACK_PAIR = bytes.fromhex(
 ACK_FIRST, ACK_SECOND = ACK_PAIR[:18], ACK_PAIR[18:]
 
 
+# A frame from a recording (20220725.rec) with 224 bytes of data, of which
+# the magic number is part of the data.
+MAGIC_IN_DATA = bytes.fromhex(
+    "e0001fff7303ba4c1273feffffff00050003ba4c12731c0018813b6376000000b34b"
+    "0000ffffa0b12a000000ba4c0000000000001000ba4c9273b40018813b63904f0000"
+    "00000000e06ae7410000ffff00000000cdbb68430000000030074842ffff7fffffff"
+    "7fffffff7fffffff7fff0844c24ba96b873fc8601234ffff7fff0100000012345679"
+    "dc1e9d3bf83f293fffff7fffffff7fff0000000000000000ba4c12730000807f0000"
+    "807f7d4dcbf010888401000000009bb1ba4c6a4bc04cb69503060000000001001088"
+    "84010000000000000000000000000000000000000000000000000100000000000000"
+    "0000ea5e"
+)
+
+
+@pytest.mark.parametrize("mode", SCANNING_MODES)
+def test_read_msg_keeps_a_frame_whose_data_has_the_magic_number(mode):
+    infile = make_file(MAGIC + MAGIC_IN_DATA + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+
+    assert results == [(b"", False), (MAGIC_IN_DATA, False), (EMPTY, True)]
+
+
+@pytest.mark.parametrize("mode", SCANNING_MODES)
+def test_read_msg_splits_at_a_magic_number_that_confirms_no_frame(mode):
+    # the magic number in the data is only split at when the frame is damaged
+    data = bytes(range(20)) + MAGIC + bytes(range(20))
+    damaged = corrupt(frame(3, data), -1, 0x01)
+    infile = make_file(MAGIC + damaged + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(4)]
+
+    first = damaged[: se.msg.MSG_HDR_LEN + 20]
+    rest = damaged[se.msg.MSG_HDR_LEN + 24 :]
+    assert results == [
+        (b"", False),
+        (first, False),
+        (rest, False),
+        (EMPTY, True),
+    ]
+
+
 @pytest.mark.parametrize("mode", SCANNING_MODES)
 def test_read_msg_returns_the_frame_that_follows_without_a_magic_number(
     mode,
