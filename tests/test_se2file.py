@@ -446,3 +446,27 @@ def test_debug_reports_the_loop_count_with_a_readable_time(
     out = capsys.readouterr().out
     # %M (minutes) and %S (seconds), not %m (month) and %s (epoch)
     assert "We've looped 60 times at 2016-01-01-12:30:00" in out
+
+
+def test_debug_says_when_an_output_file_is_closed_after_no_data(
+    workdir, se2file, capsys
+):
+    (workdir / "out").mkdir()
+
+    se2file(
+        "-v",
+        "-b",
+        "out",
+        stdin=['{"a": 1}\n', dt.timedelta(hours=1), ""],
+    )
+
+    assert "No data for 120 seconds, closing file" in capsys.readouterr().err
+
+
+def test_without_debug_the_loop_count_is_not_reported(workdir, se2file, capsys):
+    (workdir / "out").mkdir()
+
+    with pytest.raises(InputExhausted):
+        se2file("-b", "out", "-w", stdin=['{"a": 1}\n'] * 60, then_stop=True)
+
+    assert "looped" not in capsys.readouterr().err
