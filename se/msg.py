@@ -6,7 +6,9 @@ with SolarEdge inverters, including their CRC-16 checksums.
 """
 
 import logging
+import select
 import struct
+import sys
 import time
 import weakref
 from collections import deque
@@ -75,9 +77,17 @@ def read_rs232_frame(in_file, rec_file, mode, state):
     a damaged frame. The data is only read once its length is confirmed by
     its inverse length.
 
+    A frame that directly follows a valid frame needs no magic number, so it
+    is taken without one, when its bytes are already waiting.
+
     Returns:
         A tuple (msg, eof), as for read_msg.
     """
+    if _after_valid.pop(in_file, False):  # the frame before was valid
+        frame = read_frame_without_magic(in_file, rec_file, mode, state)
+        if frame is not None:
+            _after_valid[in_file] = True
+            return (frame, False)
     (skipped, eof) = skip_to_magic(in_file, rec_file, mode, state)
     if skipped:
         logger.data("Discarding %s bytes before the magic number", len(skipped))
@@ -111,7 +121,66 @@ def read_rs232_frame(in_file, rec_file, mode, state):
         # follows may be in the bytes read. They are pushed back, so that the
         # magic number search finds it.
         _pushback[in_file] = msg + _pushback.get(in_file, b"")
+    _after_valid[in_file] = frame_length(msg) is not None
     return (msg, False)
+
+
+# input files whose last RS232 frame was valid, by input file
+_after_valid = weakref.WeakKeyDictionary()
+
+
+def read_frame_without_magic(in_file, rec_file, mode, state):
+    """
+    Read a frame that follows a valid frame, without a magic number before it.
+
+    Only when bytes are already waiting on the input, so this never waits for
+    data. The bytes are pushed back unless they are a valid frame, so the
+    magic number search still finds what follows.
+
+    Returns:
+        The frame, or None if there is no valid frame at once.
+    """
+    if not input_ready(in_file):
+        return None
+    read = read_input(in_file, rec_file, MSG_HDR_LEN, mode, state)
+    length = header_length(read) if len(read) == MSG_HDR_LEN else None
+    frame = None
+    if length is not None:
+        read += read_input(in_file, rec_file, length - MSG_HDR_LEN, mode, state)
+        if frame_length(read) is not None:
+            frame = read
+    if frame is None:  # not a frame: all the bytes read are read again
+        _pushback[in_file] = read + _pushback.get(in_file, b"")
+    return frame
+
+
+def input_ready(in_file):
+    """
+    Return True if a read from the input does not wait for data.
+
+    Pushed back bytes and in-memory inputs are always ready. A serial port
+    reports the bytes waiting. A file descriptor is checked with select and a
+    zero timeout, which does not work on Windows, so there the frame is not
+    taken without a magic number.
+
+    Returns:
+        True if the read is ready, False if it would wait or is not known.
+    """
+    if _pushback.get(in_file):
+        return True
+    if hasattr(in_file, "in_waiting"):  # a serial port
+        return in_file.in_waiting > 0
+    try:
+        fd = in_file.fileno()
+    except AttributeError, OSError, ValueError:  # in memory, never waits
+        return True
+    if sys.platform == "win32":  # select does not take files there
+        return False
+    try:
+        (ready, _, _) = select.select([fd], [], [], 0)
+    except OSError, ValueError:
+        return False
+    return bool(ready)
 
 
 # bytes read ahead of the input, by input file, to be read again first

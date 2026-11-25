@@ -1,6 +1,8 @@
 import io
 import logging
+import os
 import struct
+import sys
 import time
 import types
 
@@ -508,6 +510,107 @@ def test_read_msg_skips_a_repeated_magic_number(mode):
     results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(2)]
 
     assert results == [(GOOD, False), (EMPTY, False)]
+
+
+# frames from a recording of an inverter, 20230621.rec: the first is preceded
+# by a doubled magic number, the second follows the first without one
+REAL_FIRST = bytes.fromhex("0000ffff5e01feffffffba4c127380009532")
+REAL_SECOND = bytes.fromhex("0000ffff0200ba4c1273feffffff9a031bf7")
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_takes_the_frames_of_a_doubled_magic_number(mode):
+    infile = make_file(MAGIC + MAGIC + REAL_FIRST + REAL_SECOND)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+
+    assert results == [(REAL_FIRST, False), (REAL_SECOND, False), (b"", True)]
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_returns_the_frame_that_follows_a_frame_on_rs232(mode):
+    infile = make_file(MAGIC + ACK_PAIR + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+
+    assert results == [
+        (ACK_FIRST, False),
+        (ACK_SECOND, False),
+        (EMPTY, False),
+    ]
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_pushes_back_the_bytes_after_a_frame_that_are_not_a_frame(
+    mode,
+):
+    infile = make_file(MAGIC + GOOD + bytes(20) + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(2)]
+
+    assert results == [(GOOD, False), (EMPTY, False)]
+
+
+def test_read_frame_without_magic_does_not_wait_for_data():
+    read_fd, write_fd = os.pipe()
+    infile = os.fdopen(read_fd, "rb", buffering=0)
+    mode = run_mode(passive=False, serial_type="2")
+    try:
+        os.write(write_fd, MAGIC + GOOD)
+        assert se.msg.read_msg(infile, None, mode, {}) == (GOOD, False)
+        # nothing is waiting: returns at once, the writer is still open
+        assert se.msg.read_frame_without_magic(infile, None, mode, {}) is None
+    finally:
+        infile.close()
+        os.close(write_fd)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="select needs POSIX")
+def test_read_msg_takes_a_frame_without_magic_when_it_is_waiting_on_a_pipe():
+    read_fd, write_fd = os.pipe()
+    infile = os.fdopen(read_fd, "rb", buffering=0)
+    try:
+        os.write(write_fd, MAGIC + REAL_FIRST + REAL_SECOND)
+        os.close(write_fd)
+        write_fd = None
+        mode = run_mode(passive=False, serial_type="2")
+        results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+    finally:
+        infile.close()
+        if write_fd is not None:
+            os.close(write_fd)
+
+    assert results == [(REAL_FIRST, False), (REAL_SECOND, False), (b"", True)]
+
+
+class SerialFake:
+    """A serial port that reports the bytes waiting, as pyserial does."""
+
+    def __init__(self, data):
+        self.data = data
+        self.reads = 0
+
+    @property
+    def in_waiting(self):
+        return len(self.data)
+
+    def read(self, length):
+        self.reads += 1
+        (head, self.data) = (self.data[:length], self.data[length:])
+        return head
+
+
+def test_read_frame_without_magic_uses_the_bytes_a_serial_port_reports():
+    mode = run_mode(passive=False, serial_type="2")
+    serial = SerialFake(b"")
+
+    assert se.msg.read_frame_without_magic(serial, None, mode, {}) is None
+    assert serial.reads == 0
+
+    serial = SerialFake(REAL_SECOND)
+    assert se.msg.read_frame_without_magic(serial, None, mode, {}) == (
+        REAL_SECOND
+    )
 
 
 @pytest.mark.parametrize("mode", HEADER_MODES)
