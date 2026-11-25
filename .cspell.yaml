@@ -60,6 +60,7 @@ words:
   - powerwall
   - pushback
   - pytestmark
+  - rlist
   - schinagl
   - socat
   - subclassing
@@ -85,6 +86,7 @@ words:
   - refurb
   - testpaths
   - tryceratops
+  - wlist
   - worksteal
   # python modules and functions
   - autouse
@@ -169,6 +171,7 @@ words:
   - lffffffffffff
   - refin
   - refout
+  - xlist
   - xorout
   # class names
   - umasked

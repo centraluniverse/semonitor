@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import queue
+import runpy
 import select
 import sys
 import threading
@@ -832,3 +833,106 @@ def test_a_log_that_cannot_be_written_is_logged_and_ends_the_logger(
     assert any(
         "Error writing to /dev/full" in m for m in messages(logging.ERROR)
     )
+
+
+# --- main and the command line -----------------------------------------------
+
+
+@pytest.fixture
+def started(se, monkeypatch):
+    runs = []
+
+    def run(self):
+        runs.append(self)
+
+    monkeypatch.setattr(se.Se2Influx, "run", run)
+    configs = []
+    monkeypatch.setattr(
+        se.logging, "basicConfig", lambda **kwargs: configs.append(kwargs)
+    )
+    return runs, configs
+
+
+def test_main_makes_and_runs_the_stream_from_the_command_line(
+    se, started, workdir
+):
+    runs, _configs = started
+    log = workdir / "semonitor.log"
+
+    se.main(
+        [
+            "--host",
+            "influx.example",
+            "--port",
+            "8087",
+            "--database",
+            "solar",
+            "--queue_size",
+            "5",
+            "--log_path",
+            str(log),
+            "--max_log_size",
+            "99",
+            "--local_tz",
+            "UTC",
+            "--stat_timer_secs",
+            "10",
+        ]
+    )
+
+    (obj,) = runs
+    assert obj.influx_params.host == "influx.example"
+    assert obj.influx_params.port == 8087
+    assert obj.influx_params.database == "solar"
+    assert obj.writer_queue.maxsize == 5
+    assert obj.log_path == str(log)
+    assert obj.max_log_size == 99
+    assert obj.stat_timer_secs == 10
+
+
+def test_main_logs_at_info_unless_debug_is_asked_for(se, started):
+    runs, configs = started
+
+    se.main([])
+    se.main(["--debug"])
+
+    assert [config["level"] for config in configs] == [
+        logging.INFO,
+        logging.DEBUG,
+    ]
+    assert len(runs) == 2
+
+
+@pytest.mark.usefixtures("se")
+def test_running_the_module_as_a_script_shows_the_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["se2influx.py", "--help"])
+
+    with pytest.raises(SystemExit) as exit_info:
+        runpy.run_path(str(SCRIPT), run_name="__main__")
+
+    assert exit_info.value.code == 0
+    assert "usage:" in capsys.readouterr().out
+
+
+def test_the_reader_keeps_waiting_while_stdin_is_quiet(make, se, monkeypatch):
+    read_fd, write_fd = os.pipe()
+    with os.fdopen(write_fd, "w") as write_end:
+        write_end.write("x\n")
+    real_select = select.select
+    calls = []
+
+    def quiet_at_first(rlist, wlist, xlist, timeout):
+        calls.append(timeout)
+        if len(calls) == 1:
+            return ([], [], [])  # the timeout passes with no input
+        return real_select(rlist, wlist, xlist, timeout)
+
+    monkeypatch.setattr(se.select, "select", quiet_at_first)
+    obj = make()  # no log path, so only the writer queue is filled
+
+    with os.fdopen(read_fd) as stdin:
+        monkeypatch.setattr(sys, "stdin", stdin)
+        obj.reader()
+
+    assert obj.writer_queue.get_nowait() == "x\n"
+    assert len(calls) == 3
