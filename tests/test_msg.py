@@ -583,6 +583,74 @@ def test_read_msg_takes_a_frame_without_magic_when_it_is_waiting_on_a_pipe():
     assert results == [(REAL_FIRST, False), (REAL_SECOND, False), (b"", True)]
 
 
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_pushes_back_a_frame_with_a_bad_checksum_after_a_frame(mode):
+    broken = corrupt(GOOD, -1, 0x01)
+    infile = make_file(MAGIC + GOOD + broken + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(2)]
+
+    assert results == [(GOOD, False), (EMPTY, False)]
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_reads_the_bytes_pushed_back_before_a_following_frame(mode):
+    # A damaged frame whose data holds a frame. The bytes after that frame in
+    # the data are pushed back, and a frame may follow them without a magic.
+    inner = MAGIC + GOOD + b"\x00" * 4
+    damaged = corrupt(frame(1, inner), -1, 0x01)
+    infile = make_file(MAGIC + damaged + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+
+    assert results == [(damaged, False), (GOOD, False), (EMPTY, False)]
+
+
+def test_input_ready_is_true_for_an_in_memory_input():
+    assert se.msg.input_ready(make_file(b""))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="select needs POSIX")
+def test_input_ready_waits_for_a_pipe_only_when_it_has_no_data():
+    read_fd, write_fd = os.pipe()
+    infile = os.fdopen(read_fd, "rb", buffering=0)
+    try:
+        assert not se.msg.input_ready(infile)
+        os.write(write_fd, b"x")
+        assert se.msg.input_ready(infile)
+    finally:
+        infile.close()
+        os.close(write_fd)
+
+
+def test_input_ready_does_not_use_select_on_windows(monkeypatch):
+    read_fd, write_fd = os.pipe()
+    infile = os.fdopen(read_fd, "rb", buffering=0)
+    try:
+        os.write(write_fd, b"x")
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert not se.msg.input_ready(infile)
+    finally:
+        infile.close()
+        os.close(write_fd)
+
+
+def test_input_ready_is_false_when_select_fails(monkeypatch):
+    read_fd, write_fd = os.pipe()
+    infile = os.fdopen(read_fd, "rb", buffering=0)
+
+    def select(*_args):
+        msg = "no select"
+        raise OSError(msg)
+
+    try:
+        monkeypatch.setattr(se.msg.select, "select", select)
+        assert not se.msg.input_ready(infile)
+    finally:
+        infile.close()
+        os.close(write_fd)
+
+
 class SerialFake:
     """A serial port that reports the bytes waiting, as pyserial does."""
 
