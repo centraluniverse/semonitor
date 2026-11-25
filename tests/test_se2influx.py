@@ -825,11 +825,6 @@ def test_the_logger_keeps_waiting_while_its_queue_is_empty(make, workdir):
 
 
 @pytest.mark.skipif(not Path("/dev/full").exists(), reason="needs /dev/full")
-@pytest.mark.xfail(
-    strict=True,
-    raises=OSError,
-    reason="new issue, not filed: the close of the log file raises out of logger",
-)
 def test_a_log_that_cannot_be_written_is_logged_and_ends_the_logger(
     make, messages
 ):

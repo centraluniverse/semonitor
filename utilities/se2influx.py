@@ -253,6 +253,12 @@ class Se2Influx:
                         log_fh.flush()
                     except Exception:
                         logger.exception("Error writing to %s", self.log_path)
+                        # The data that could not be written is still buffered.
+                        # Closing it here drops that data. The close of the
+                        # stack would flush it again and raise out of the
+                        # thread.
+                        with contextlib.suppress(OSError):
+                            log_fh.close()
                         return
 
                     size = os.stat(self.log_path).st_size
