@@ -560,16 +560,8 @@ def test_a_frame_with_the_magic_in_its_data_is_one_frame(
 @pytest.mark.parametrize(
     "fault",
     [
-        pytest.param(
-            drop(IN_THE_DATA),
-            id="drop-data",
-            marks=pytest.mark.xfail(reason="Issue #61"),
-        ),
-        pytest.param(
-            insert(IN_THE_DATA),
-            id="insert-data",
-            marks=pytest.mark.xfail(reason="Issue #61"),
-        ),
+        pytest.param(drop(IN_THE_DATA), id="drop-data"),
+        pytest.param(insert(IN_THE_DATA), id="insert-data"),
         pytest.param(flip(4, 0x01), id="flip-length"),
     ],
 )

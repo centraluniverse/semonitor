@@ -86,7 +86,7 @@ def read_rs232_frame(in_file, rec_file, mode, state):
     if eof:  # end of file before a magic number
         return (b"", True)
     # read the header
-    msg = read_bytes(in_file, rec_file, MSG_HDR_LEN, mode, state)
+    msg = read_input(in_file, rec_file, MSG_HDR_LEN, mode, state)
     if len(msg) < MSG_HDR_LEN:  # end of file in the header
         return (b"", True)
     (data_len, data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
@@ -97,8 +97,37 @@ def read_rs232_frame(in_file, rec_file, mode, state):
         reject_inverse(msg, data_len, data_len_inv)
         return (b"", False)
     # read the data and checksum
-    msg += read_bytes(in_file, rec_file, data_len + CHECKSUM_LEN, mode, state)
+    length = data_len + CHECKSUM_LEN
+    msg += read_input(in_file, rec_file, length, mode, state)
+    if len(msg) == MSG_HDR_LEN + length and frame_length(msg) is None:
+        # The length is confirmed by its inverse, but the checksum is wrong.
+        # A lost or added byte in the data shifts the frame, so the frame that
+        # follows may be in the bytes read. They are pushed back, so that the
+        # magic number search finds it.
+        _pushback[in_file] = msg + _pushback.get(in_file, b"")
     return (msg, False)
+
+
+# bytes read ahead of the input, by input file, to be read again first
+_pushback = weakref.WeakKeyDictionary()
+
+
+def read_input(in_file, rec_file, length, mode, state):
+    """
+    Read the specified number of bytes, the pushed back bytes first.
+
+    The pushed back bytes were recorded when they were first read, so they
+    are not recorded again.
+
+    Returns:
+        The bytes read, which are fewer at the end of the input.
+    """
+    pushed = _pushback.get(in_file, b"")
+    head = pushed[:length]
+    _pushback[in_file] = pushed[len(head) :]
+    if len(head) < length:
+        head += read_bytes(in_file, rec_file, length - len(head), mode, state)
+    return head
 
 
 def scan_msg(in_file, rec_file, mode, state):
@@ -267,7 +296,7 @@ def skip_to_magic(in_file, rec_file, mode, state):
     skipped = bytearray()
     window = b""  # the last bytes read, at most a magic number long
     while window != magic:
-        next_byte = read_bytes(in_file, rec_file, 1, mode, state)
+        next_byte = read_input(in_file, rec_file, 1, mode, state)
         if not next_byte:  # end of file
             return (bytes(skipped) + window, True)
         window += next_byte

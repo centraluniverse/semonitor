@@ -483,7 +483,6 @@ def test_read_msg_resyncs_on_the_magic_number_after_a_damaged_frame(mode):
     assert results == [(b"", False), (EMPTY, False), (b"", True)]
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #61")
 @pytest.mark.parametrize("mode", HEADER_MODES)
 def test_read_msg_finds_the_frame_after_a_frame_that_lost_a_byte(mode):
     # the length of the damaged frame is still read, so its end is taken from
