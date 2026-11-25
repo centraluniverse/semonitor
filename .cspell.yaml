@@ -70,7 +70,6 @@ words:
   # tools and distribution packaging
   - addopts
   - adduser
-  - applymarker
   - codespell
   - containerfile
   - datetimez

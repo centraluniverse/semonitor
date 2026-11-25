@@ -404,6 +404,47 @@ def test_read_msg_does_not_read_the_data_of_a_bad_inverse_length(caplog, mode):
 
 
 @pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_skips_the_bytes_before_the_magic_number(caplog, mode):
+    log_all(caplog, DATA_LEVEL)
+    infile = make_file(b"junk" + MAGIC + GOOD)
+
+    assert se.msg.read_msg(infile, None, mode, {}) == (GOOD, False)
+
+    assert "Discarding 4 bytes before the magic number" in messages(
+        caplog, DATA_LEVEL
+    )
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_resyncs_on_the_magic_number_after_a_damaged_frame(mode):
+    # the damaged header is rejected, and the rest of its frame is skipped
+    infile = make_file(MAGIC + corrupt(GOOD, 2, 0x01) + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(3)]
+
+    assert results == [(b"", False), (EMPTY, False), (b"", True)]
+
+
+@pytest.mark.xfail(strict=True, reason="Issue #61")
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_finds_the_frame_after_a_frame_that_lost_a_byte(mode):
+    # the length of the damaged frame is still read, so its end is taken from
+    # the length, and the magic number of the next frame is read as data
+    infile = make_file(MAGIC + GOOD[:17] + GOOD[18:] + MAGIC + EMPTY)
+
+    results = read_all(infile, None, mode)
+
+    assert EMPTY in [msg for msg, _ in results]
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_does_not_take_a_frame_without_the_magic_number(mode):
+    infile = make_file(corrupt(MAGIC, 0, 0x01) + GOOD + MAGIC + EMPTY)
+
+    assert se.msg.read_msg(infile, None, mode, {}) == (EMPTY, False)
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
 def test_read_msg_reports_the_end_of_a_file_inside_the_header(mode):
     infile = make_file(MAGIC + GOOD[:6])
 

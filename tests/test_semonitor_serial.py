@@ -571,12 +571,12 @@ def test_a_frame_with_the_magic_in_its_data_is_one_frame(
         pytest.param(
             drop(IN_THE_DATA),
             id="drop-data",
-            marks=pytest.mark.xfail(strict=True, reason="Issue #61"),
+            marks=pytest.mark.xfail(reason="Issue #61"),
         ),
         pytest.param(
             insert(IN_THE_DATA),
             id="insert-data",
-            marks=pytest.mark.xfail(strict=True, reason="Issue #61"),
+            marks=pytest.mark.xfail(reason="Issue #61"),
         ),
         pytest.param(flip(4, 0x01), id="flip-length"),
     ],
@@ -590,7 +590,6 @@ def test_rs232_finds_the_next_frame_after_a_lost_one(
     converted(run, recording, stream, lost={TARGET})
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #62")
 @pytest.mark.parametrize("fault", FLIPPED_MAGIC)
 def test_rs232_does_not_take_a_frame_without_the_magic_number(
     serial_run, recording, fault

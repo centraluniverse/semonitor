@@ -57,48 +57,75 @@ def read_msg(in_file, rec_file, mode, state):
     se.logutils.set_state(state, "passiveMode", mode.passive_mode)
     se.logutils.set_state(state, "serialType", mode.serial_type)
     Seq.data_in += 1
-    msg = b""
-    eof = False
     if mode.serial_type == "2":
-        # RS232
-        # read the magic number and header
-        msg = read_bytes(
-            in_file, rec_file, MAGIC_LEN + MSG_HDR_LEN, mode, state
-        )
-        if len(msg) < MAGIC_LEN + MSG_HDR_LEN:  # end of file in the header
-            return (b"", True)
-        (data_len, data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
-            struct.unpack("<HHHLLH", msg[MAGIC_LEN:])
-        )
-        # the data length is only trusted when its inverse agrees with it
-        if data_len != ~data_len_inv & 0xFFFF:
-            reject_inverse(msg[MAGIC_LEN:], data_len, data_len_inv)
-            return (b"", False)
-        # read the data and checksum
-        msg += read_bytes(
-            in_file, rec_file, data_len + CHECKSUM_LEN, mode, state
-        )
-        msg = msg[MAGIC_LEN:]  # strip the magic number from the beginning
+        (msg, eof) = read_rs232_frame(in_file, rec_file, mode, state)
     elif in_file in _pending:
         # a frame that followed the previous one without a magic number
         (msg, eof) = _pending.pop(in_file)
     else:
-        # RS485, or a file or stdin
-        # read 1 byte at a time until the next magic number
-        while msg[-MAGIC_LEN:] != magic:
-            next_byte = read_bytes(in_file, rec_file, 1, mode, state)
-            if not next_byte:  # end of file
-                eof = True
-                msg += magic  # append a magic number to end the loop
-            else:
-                msg += next_byte
-        msg = msg[:-MAGIC_LEN]  # strip the magic number from the end
-        (msg, rest) = split_frame(msg)
-        if rest:  # keep the frame that follows, it is returned next
-            _pending[in_file] = (rest, eof)
-            eof = False
+        (msg, eof) = scan_msg(in_file, rec_file, mode, state)
     if len(msg) > 0:  # don't log zero length messages
         logger.message("-->", Seq.data_in, magic + msg, in_file.name)
+    return (msg, eof)
+
+
+def read_rs232_frame(in_file, rec_file, mode, state):
+    """
+    Read an RS232 frame: the magic number, header, data and checksum.
+
+    The bytes before the magic number are skipped, which also resyncs after
+    a damaged frame. The data is only read once its length is confirmed by
+    its inverse length.
+
+    Returns:
+        A tuple (msg, eof), as for read_msg.
+    """
+    (skipped, eof) = skip_to_magic(in_file, rec_file, mode, state)
+    if skipped:
+        logger.data("Discarding %s bytes before the magic number", len(skipped))
+        for line in se.logutils.format_data(skipped):
+            logger.data(line)
+    if eof:  # end of file before a magic number
+        return (b"", True)
+    # read the header
+    msg = read_bytes(in_file, rec_file, MSG_HDR_LEN, mode, state)
+    if len(msg) < MSG_HDR_LEN:  # end of file in the header
+        return (b"", True)
+    (data_len, data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
+        struct.unpack("<HHHLLH", msg)
+    )
+    # the data length is only trusted when its inverse agrees with it
+    if data_len != ~data_len_inv & 0xFFFF:
+        reject_inverse(msg, data_len, data_len_inv)
+        return (b"", False)
+    # read the data and checksum
+    msg += read_bytes(in_file, rec_file, data_len + CHECKSUM_LEN, mode, state)
+    return (msg, False)
+
+
+def scan_msg(in_file, rec_file, mode, state):
+    """
+    Read the bytes up to the next magic number, for RS485, a file or stdin.
+
+    Returns:
+        A tuple (msg, eof), as for read_msg. A second frame that follows the
+        message without a magic number is kept for the next read.
+    """
+    msg = b""
+    eof = False
+    # read 1 byte at a time until the next magic number
+    while msg[-MAGIC_LEN:] != magic:
+        next_byte = read_bytes(in_file, rec_file, 1, mode, state)
+        if not next_byte:  # end of file
+            eof = True
+            msg += magic  # append a magic number to end the loop
+        else:
+            msg += next_byte
+    msg = msg[:-MAGIC_LEN]  # strip the magic number from the end
+    (msg, rest) = split_frame(msg)
+    if rest:  # keep the frame that follows, it is returned next
+        _pending[in_file] = (rest, eof)
+        eof = False
     return (msg, eof)
 
 
@@ -152,6 +179,28 @@ def frame_length(msg):
     if calcsum != checksum:
         return None
     return length
+
+
+def skip_to_magic(in_file, rec_file, mode, state):
+    """
+    Read the input up to and including the next magic number.
+
+    Returns:
+        A tuple (skipped, eof), where skipped holds the bytes read before the
+        magic number. At the end of the input, eof is True and skipped holds
+        all the bytes read.
+    """
+    skipped = bytearray()
+    window = b""  # the last bytes read, at most a magic number long
+    while window != magic:
+        next_byte = read_bytes(in_file, rec_file, 1, mode, state)
+        if not next_byte:  # end of file
+            return (bytes(skipped) + window, True)
+        window += next_byte
+        if len(window) > MAGIC_LEN:
+            skipped += window[:1]
+            window = window[1:]
+    return (bytes(skipped), False)
 
 
 def read_bytes(in_file, rec_file, length, mode, state):
