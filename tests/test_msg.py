@@ -313,6 +313,51 @@ def test_read_msg_keeps_garbage_in_front_of_a_message(mode):
     assert se.msg.read_msg(infile, None, mode, {}) == (GOOD, True)
 
 
+# Two acknowledgments as the inverter sends them, one after the other with
+# no magic number between them (from a recording, 20220725.rec).
+ACK_PAIR = bytes.fromhex(
+    "0000ffff6705feffffffba4c12738000b5610000ffff680bba4c1273feffffff9a0321f5"
+)
+ACK_FIRST, ACK_SECOND = ACK_PAIR[:18], ACK_PAIR[18:]
+
+
+@pytest.mark.parametrize("mode", SCANNING_MODES)
+def test_read_msg_returns_the_frame_that_follows_without_a_magic_number(
+    mode,
+):
+    infile = make_file(MAGIC + ACK_PAIR + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(4)]
+
+    assert results == [
+        (b"", False),
+        (ACK_FIRST, False),
+        (ACK_SECOND, False),
+        (EMPTY, True),
+    ]
+
+
+@pytest.mark.parametrize("mode", SCANNING_MODES)
+def test_read_msg_keeps_the_bytes_after_a_message_that_are_not_a_frame(
+    caplog, mode
+):
+    log_all(caplog, DATA_LEVEL)
+    infile = make_file(MAGIC + GOOD + b"\xaa\xbb")
+
+    assert se.msg.read_msg(infile, None, mode, {}) == (b"", False)
+    assert se.msg.read_msg(infile, None, mode, {}) == (GOOD + b"\xaa\xbb", True)
+
+    # the bytes are not a second frame, so validate_msg discards them
+    assert se.msg.parse_msg(GOOD + b"\xaa\xbb") == (
+        1,
+        SRC,
+        DST,
+        FUNCTION,
+        b"\x01\x02\x03",
+    )
+    assert "Discarding 2 extra bytes" in messages(caplog, DATA_LEVEL)
+
+
 @pytest.mark.parametrize("mode", SCANNING_MODES)
 def test_read_msg_without_any_magic_number_returns_the_rest(mode):
     assert se.msg.read_msg(make_file(b"abc"), None, mode, {}) == (b"abc", True)

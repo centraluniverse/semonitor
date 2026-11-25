@@ -8,6 +8,7 @@ with SolarEdge inverters, including their CRC-16 checksums.
 import logging
 import struct
 import time
+import weakref
 from typing import NamedTuple
 
 import se.logutils
@@ -78,6 +79,9 @@ def read_msg(in_file, rec_file, mode, state):
             in_file, rec_file, data_len + CHECKSUM_LEN, mode, state
         )
         msg = msg[MAGIC_LEN:]  # strip the magic number from the beginning
+    elif in_file in _pending:
+        # a frame that followed the previous one without a magic number
+        (msg, eof) = _pending.pop(in_file)
     else:
         # RS485, or a file or stdin
         # read 1 byte at a time until the next magic number
@@ -89,9 +93,65 @@ def read_msg(in_file, rec_file, mode, state):
             else:
                 msg += next_byte
         msg = msg[:-MAGIC_LEN]  # strip the magic number from the end
+        (msg, rest) = split_frame(msg)
+        if rest:  # keep the frame that follows, it is returned next
+            _pending[in_file] = (rest, eof)
+            eof = False
     if len(msg) > 0:  # don't log zero length messages
         logger.message("-->", Seq.data_in, magic + msg, in_file.name)
     return (msg, eof)
+
+
+# frames that were read after a frame, without a magic number between them
+_pending = weakref.WeakKeyDictionary()
+
+
+def split_frame(msg):
+    """
+    Split a message that holds a second frame after the first one.
+
+    The second frame must follow the first at once, and both must be valid
+    frames. Anything else is left as it is, for validate_msg to discard.
+
+    Returns:
+        A tuple (first, rest), where rest is b"" when there is no second frame.
+    """
+    length = frame_length(msg)
+    if length is None or length >= len(msg):
+        return (msg, b"")
+    rest = msg[length:]
+    if frame_length(rest) is None:
+        return (msg, b"")
+    return (msg[:length], rest)
+
+
+def frame_length(msg):
+    """
+    Return the length of the frame at the start of msg, if it is valid.
+
+    The frame is valid when its inverse length agrees, the data fits in msg,
+    and the checksum is correct.
+
+    Returns:
+        The length of the frame including its checksum, or None if the frame
+        is not valid.
+    """
+    if len(msg) < MSG_HDR_LEN + CHECKSUM_LEN:
+        return None
+    (data_len, data_len_inv, msg_seq, from_addr, to_addr, function) = (
+        struct.unpack("<HHHLLH", msg[0:MSG_HDR_LEN])
+    )
+    length = MSG_HDR_LEN + data_len + CHECKSUM_LEN
+    if data_len != ~data_len_inv & 0xFFFF or length > len(msg):
+        return None
+    data = msg[MSG_HDR_LEN : MSG_HDR_LEN + data_len]
+    checksum = struct.unpack("<H", msg[length - CHECKSUM_LEN : length])[0]
+    calcsum = calc_crc(
+        struct.pack(">HLLH", msg_seq, from_addr, to_addr, function) + data
+    )
+    if calcsum != checksum:
+        return None
+    return length
 
 
 def read_bytes(in_file, rec_file, length, mode, state):
