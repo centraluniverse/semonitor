@@ -1,6 +1,8 @@
 import io
 import json
+import runpy
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -205,6 +207,17 @@ def test_help_describes_the_tool(monkeypatch, capsys):
     assert code == 0
     assert "null" in out
     assert "infile" in out
+
+
+def test_running_the_script_runs_main(monkeypatch, capsys):
+    script = Path(se2json.__file__)
+    monkeypatch.setattr(sys, "argv", [str(script), "-h"])
+
+    with pytest.raises(SystemExit) as exit_:
+        runpy.run_path(str(script), run_name="__main__")
+
+    assert exit_.value.code == 0
+    assert "infile" in capsys.readouterr().out
 
 
 # --- the output of semonitor --------------------------------------------------
