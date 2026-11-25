@@ -345,6 +345,22 @@ def test_read_msg_keeps_a_frame_whose_data_has_the_magic_number(mode):
 
 
 @pytest.mark.parametrize("mode", SCANNING_MODES)
+def test_read_msg_keeps_the_bytes_after_a_joined_frame(mode):
+    # the bytes after the frame are in the same segment as its end
+    junk = b"\x55\xaa\x01"
+    infile = make_file(MAGIC + MAGIC_IN_DATA + junk + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(4)]
+
+    assert results == [
+        (b"", False),
+        (MAGIC_IN_DATA, False),
+        (junk, False),
+        (EMPTY, True),
+    ]
+
+
+@pytest.mark.parametrize("mode", SCANNING_MODES)
 def test_read_msg_splits_at_a_magic_number_that_confirms_no_frame(mode):
     # the magic number in the data is only split at when the frame is damaged
     data = bytes(range(20)) + MAGIC + bytes(range(20))
