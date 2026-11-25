@@ -78,6 +78,24 @@ def workdir(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def root_logger():
+    # Parsing the arguments configures the root logger; put it back so the
+    # next test sees the handlers, level and filters it had before.
+    root = logging.getLogger()
+    handlers = root.handlers[:]
+    level = root.level
+    filters = root.filters[:]
+    yield root
+    for handler in root.handlers[:]:
+        if handler not in handlers:
+            root.removeHandler(handler)
+            handler.close()
+    root.handlers[:] = handlers
+    root.setLevel(level)
+    root.filters[:] = filters
+
+
 @pytest.fixture
 def golden_dir():
     return GOLDEN_DIR
