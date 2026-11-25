@@ -87,6 +87,12 @@ def read_rs232_frame(in_file, rec_file, mode, state):
         return (b"", True)
     # read the header
     msg = read_input(in_file, rec_file, MSG_HDR_LEN, mode, state)
+    # a repeated magic number (M M X) is skipped, a header can't start with it
+    while len(msg) == MSG_HDR_LEN and msg[:MAGIC_LEN] == magic:
+        logger.data("Skipping a repeated magic number")
+        msg = msg[MAGIC_LEN:] + read_input(
+            in_file, rec_file, MAGIC_LEN, mode, state
+        )
     if len(msg) < MSG_HDR_LEN:  # end of file in the header
         return (b"", True)
     (data_len, data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (

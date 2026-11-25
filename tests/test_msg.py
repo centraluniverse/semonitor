@@ -502,6 +502,15 @@ def test_read_msg_does_not_take_a_frame_without_the_magic_number(mode):
 
 
 @pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_skips_a_repeated_magic_number(mode):
+    infile = make_file(MAGIC + MAGIC + GOOD + MAGIC + EMPTY)
+
+    results = [se.msg.read_msg(infile, None, mode, {}) for _ in range(2)]
+
+    assert results == [(GOOD, False), (EMPTY, False)]
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
 def test_read_msg_reports_the_end_of_a_file_inside_the_header(mode):
     infile = make_file(MAGIC + GOOD[:6])
 
