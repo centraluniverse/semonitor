@@ -66,9 +66,13 @@ def read_msg(in_file, rec_file, mode, state):
         )
         if len(msg) < MAGIC_LEN + MSG_HDR_LEN:  # end of file in the header
             return (b"", True)
-        (data_len, _data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
+        (data_len, data_len_inv, _msg_seq, _from_addr, _to_addr, _function) = (
             struct.unpack("<HHHLLH", msg[MAGIC_LEN:])
         )
+        # the data length is only trusted when its inverse agrees with it
+        if data_len != ~data_len_inv & 0xFFFF:
+            reject_inverse(msg[MAGIC_LEN:], data_len, data_len_inv)
+            return (b"", False)
         # read the data and checksum
         msg += read_bytes(
             in_file, rec_file, data_len + CHECKSUM_LEN, mode, state
@@ -148,6 +152,23 @@ def reject_msg(msg, reason, *args):
     return (0, 0, 0, 0, b"")
 
 
+def reject_inverse(msg, data_len, data_len_inv):
+    """
+    Reject a message whose data length does not match its inverse length.
+
+    Returns:
+        The empty message tuple (0, 0, 0, 0, b"").
+    """
+    return reject_msg(
+        msg,
+        "Data length 0x%04x doesn't match inverse length 0x%04x, "
+        "expected 0x%04x",
+        data_len,
+        data_len_inv,
+        ~data_len & 0xFFFF,
+    )
+
+
 def validate_msg(msg):
     """
     Parse the header of a message and check its lengths and checksum.
@@ -175,14 +196,7 @@ def validate_msg(msg):
     )
     # data length must match inverse length, before the length is used
     if data_len != ~data_len_inv & 0xFFFF:
-        return reject_msg(
-            msg,
-            "Data length 0x%04x doesn't match inverse length 0x%04x, "
-            "expected 0x%04x",
-            data_len,
-            data_len_inv,
-            ~data_len & 0xFFFF,
-        )
+        return reject_inverse(msg, data_len, data_len_inv)
     # header + data + checksum can't be longer than the message
     if MSG_HDR_LEN + data_len + CHECKSUM_LEN > len(msg):
         return reject_msg(

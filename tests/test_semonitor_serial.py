@@ -565,12 +565,19 @@ def test_a_frame_with_the_magic_in_its_data_is_one_frame(
 
 # The length of the frame is all that RS232 has to find the next frame, so
 # a frame that does not have that length loses all the frames after it.
-@pytest.mark.xfail(strict=True, reason="Issue #61")
 @pytest.mark.parametrize(
     "fault",
     [
-        pytest.param(drop(IN_THE_DATA), id="drop-data"),
-        pytest.param(insert(IN_THE_DATA), id="insert-data"),
+        pytest.param(
+            drop(IN_THE_DATA),
+            id="drop-data",
+            marks=pytest.mark.xfail(strict=True, reason="Issue #61"),
+        ),
+        pytest.param(
+            insert(IN_THE_DATA),
+            id="insert-data",
+            marks=pytest.mark.xfail(strict=True, reason="Issue #61"),
+        ),
         pytest.param(flip(4, 0x01), id="flip-length"),
     ],
 )

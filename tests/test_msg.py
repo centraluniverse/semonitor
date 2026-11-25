@@ -345,6 +345,20 @@ def test_read_msg_returns_what_is_left_of_a_truncated_message(mode):
 
 
 @pytest.mark.parametrize("mode", HEADER_MODES)
+def test_read_msg_does_not_read_the_data_of_a_bad_inverse_length(caplog, mode):
+    log_all(caplog, logging.ERROR)
+    damaged = corrupt(GOOD, 2, 0x01)
+    infile = make_file(MAGIC + damaged + b"rest")
+
+    assert se.msg.read_msg(infile, None, mode, {}) == (b"", False)
+
+    # only the header was read, the data and what follows are still unread
+    assert infile.read() == damaged[se.msg.MSG_HDR_LEN :] + b"rest"
+    (logged,) = messages(caplog, logging.ERROR)
+    assert logged == inverse_mismatch(damaged)
+
+
+@pytest.mark.parametrize("mode", HEADER_MODES)
 def test_read_msg_reports_the_end_of_a_file_inside_the_header(mode):
     infile = make_file(MAGIC + GOOD[:6])
 
