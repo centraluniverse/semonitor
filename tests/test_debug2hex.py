@@ -186,3 +186,9 @@ def test_what_semonitor_logs_for_data_gives_the_data_back(
     run_debug2hex(monkeypatch, log, workdir / "out.bin")
 
     assert (workdir / "out.bin").read_bytes() == data
+
+
+def test_importing_the_script_does_not_run_main(monkeypatch):
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "does-not-exist.log"])
+
+    runpy.run_path(str(SCRIPT), run_name="not_main")
