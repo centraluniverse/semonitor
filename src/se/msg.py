@@ -5,6 +5,7 @@ Reads, parses, formats, validates and sends the framed messages exchanged
 with SolarEdge inverters, including their CRC-16 checksums.
 """
 
+import functools
 import logging
 import select
 import struct
@@ -25,6 +26,10 @@ magic = b"\x12\x34\x56\x79"
 MAGIC_LEN = len(magic)
 MSG_HDR_LEN = 16
 CHECKSUM_LEN = 2
+# CRC repairs that can be enabled: "crc" repairs a bit of the checksum, "data" a
+# bit of the header or data, and implies "crc"
+REPAIR_LEVELS = ("crc", "data")
+REPAIR_MAX_BITS = 32767  # CRC-16 0x8005 has distance 4 only up to this length
 
 
 class MsgHdr(NamedTuple):
@@ -407,11 +412,15 @@ def read_bytes(in_file, rec_file, length, mode, state):
     return in_buf
 
 
-def parse_msg(msg):
+def parse_msg(msg, repair=()):
     """
     Parse a message into its sequence, addresses, function and data.
 
     Messages shorter than a header plus checksum are thrown out.
+
+    Args:
+        msg: The message, without its magic number.
+        repair: The CRC repair levels that are enabled, see validate_msg.
 
     Returns:
         A tuple (msgSeq, fromAddr, toAddr, function, data). All fields are
@@ -422,7 +431,7 @@ def parse_msg(msg):
     ):  # throw out messages that are too short
         logger.data("Threw out a message that was too short")
         return (0, 0, 0, 0, b"")
-    (msg_seq, from_addr, to_addr, function, data) = validate_msg(msg)
+    (msg_seq, from_addr, to_addr, function, data) = validate_msg(msg, repair)
     return (msg_seq, from_addr, to_addr, function, data)
 
 
@@ -456,11 +465,182 @@ def reject_inverse(msg, data_len, data_len_inv):
     )
 
 
-def validate_msg(msg):
+class Fault(NamedTuple):
+    """A bit that is wrong in a frame, and the level that repairs it."""
+
+    level: str  # "crc" for a bit of the checksum, "data" for a covered bit
+    frame_byte: object  # the byte of the frame, None for a bit of the checksum
+    mask: int  # the bit of the checksum, or of the frame byte
+    direction: str  # "1->0" or "0->1" for a bit of the checksum, else ""
+
+
+def find_fault(checksum, calcsum, data_len, frame_len):
+    """
+    Find the one bit that is wrong in a frame of exactly its declared length.
+
+    The syndrome, the XOR of the received and the calculated checksum, is one
+    bit for a bit of the checksum that is wrong. A bit of the sequence,
+    addresses, function or data has a syndrome of its own, see data_syndromes.
+    A frame longer than REPAIR_MAX_BITS is not looked at.
+
+    Returns:
+        A Fault, or None if no single bit explains the checksum.
+    """
+    if 8 * frame_len > REPAIR_MAX_BITS:
+        return None
+    diff = checksum ^ calcsum
+    if diff == 0:
+        return None
+    if (diff & (diff - 1)) == 0:  # one bit: the checksum
+        direction = "1->0" if checksum & diff else "0->1"
+        return Fault("crc", None, diff, direction)
+    found = data_syndromes(data_len).get(diff)
+    if found is None:
+        return None
+    return Fault("data", found[0], found[1], "")
+
+
+def describe(fault):
+    """
+    Return where the wrong bit is, in the words of the log.
+
+    Returns:
+        The bit of the checksum or of the frame byte, with its bit number.
+    """
+    bit = fault.mask.bit_length() - 1
+    if fault.frame_byte is None:
+        return f"checksum bit {bit} {fault.direction}"
+    return f"frame byte {fault.frame_byte} bit {bit}"
+
+
+def hint(fault):
+    """
+    Return what the reject reason says when a frame is repairable, but off.
+
+    Returns:
+        The hint to add to the checksum error, naming the level to repair it.
+    """
+    return f", looks repairable with -R {fault.level}: {describe(fault)}"
+
+
+def _enabled(levels, level):
+    """
+    Return whether a repair level is enabled, data implies the crc level.
+
+    Returns:
+        True if the level is enabled.
+    """
+    return level in levels or (level == "crc" and "data" in levels)
+
+
+# the covered header fields as (frame offset, size), in the order of the CRC
+CRC_FIELDS = ((4, 2), (6, 4), (10, 4), (14, 2))  # sequence, from, to, function
+CRC_HDR_LEN = 12  # the covered header fields, before the data
+
+
+def crc_frame_byte(index):
+    """
+    Return the frame byte of a byte of the CRC input.
+
+    The header fields are big endian in the CRC input, and little endian in
+    the frame, so their bytes are in reverse order.
+
+    Returns:
+        The index of the byte in the frame.
+
+    Raises:
+        ValueError: If the index is not a covered byte of the header.
+    """
+    if index >= CRC_HDR_LEN:  # data
+        return index + MSG_HDR_LEN - CRC_HDR_LEN
+    start = 0
+    for offset, size in CRC_FIELDS:
+        if index < start + size:
+            return offset + size - 1 - (index - start)
+        start += size
+    msg = f"no CRC field at {index}"
+    raise ValueError(msg)
+
+
+@functools.cache
+def data_syndromes(data_len):
+    """
+    Map the syndrome of each covered bit to its frame byte and mask.
+
+    The covered bytes are the sequence, addresses, function and data, as the
+    CRC takes them. The syndrome of a bit only depends on its position, so the
+    table is made once per data length. A table with a repeated syndrome, or
+    with a syndrome of an even number of bits or of one bit, is empty.
+
+    Returns:
+        A dict {syndrome: (frame_byte, mask)}.
+    """
+    entries = []
+    column = [CRC_TABLE[1 << bit] for bit in range(8)]
+    for index in range(CRC_HDR_LEN + data_len - 1, -1, -1):
+        for bit, syndrome in enumerate(column):
+            entries.append((syndrome, crc_frame_byte(index), 1 << bit))
+        column = [CRC_TABLE[s & 0xFF] ^ (s >> 8) for s in column]
+    syndromes = [entry[0] for entry in entries]
+    if len(set(syndromes)) != len(syndromes) or any(
+        s.bit_count() % 2 == 0 or s & (s - 1) == 0 for s in syndromes
+    ):
+        return {}
+    return {syndrome: (byte, mask) for syndrome, byte, mask in entries}
+
+
+def repair_frame(msg, fault, checksum, calcsum):
+    """
+    Repair the bit of a fault, and log the repair at WARNING.
+
+    A bit of the checksum is repaired by the checksum alone, the data is not
+    changed. A covered bit is flipped back, and then the checksum must match.
+
+    Returns:
+        The repaired message, or None if the flip does not give the checksum.
+    """
+    fixed = bytearray(msg)
+    if fault.frame_byte is not None:
+        fixed[fault.frame_byte] ^= fault.mask
+    (data_len,) = struct.unpack_from("<H", msg, 0)
+    (msg_seq, from_addr, to_addr, function) = struct.unpack(
+        "<HLLH", fixed[4:MSG_HDR_LEN]
+    )
+    data = bytes(fixed[MSG_HDR_LEN : MSG_HDR_LEN + data_len])
+    if (
+        fault.frame_byte is not None
+        and calc_crc(
+            struct.pack(">HLLH", msg_seq, from_addr, to_addr, function) + data
+        )
+        != checksum
+    ):
+        return None
+    logger.warning(
+        "Repaired frame seq %d from 0x%08x to 0x%08x function 0x%04x: %s, "
+        "checksum 0x%04x -> 0x%04x",
+        msg_seq,
+        from_addr,
+        to_addr,
+        function,
+        describe(fault),
+        checksum,
+        calcsum,
+    )
+    return bytes(fixed)
+
+
+def validate_msg(msg, repair=()):
     """
     Parse the header of a message and check its lengths and checksum.
 
-    Extra bytes after the message are logged and discarded.
+    Extra bytes after the message are logged and discarded. A checksum that
+    does not match is looked at for one bit that is wrong, see find_fault. The
+    frame is repaired when that bit's level is in repair, and is rejected
+    otherwise. A frame that looks repairable is logged as such, either way.
+
+    Args:
+        msg: The message, without its magic number.
+        repair: The CRC repair levels that are enabled, see REPAIR_LEVELS.
 
     Returns:
         A tuple (msgSeq, fromAddr, toAddr, function, data), or the rejected
@@ -508,12 +688,23 @@ def validate_msg(msg):
         struct.pack(">HLLH", msg_seq, from_addr, to_addr, function) + data
     )
     if calcsum != checksum:
-        return reject_msg(
-            msg,
-            "Checksum error. Expected 0x%04x, got 0x%04x",
-            calcsum,
-            checksum,
+        fault = None
+        if extra_len == 0:  # the length of the message is confirmed
+            fault = find_fault(checksum, calcsum, data_len, len(msg))
+        enabled = fault is not None and _enabled(repair, fault.level)
+        repaired = (
+            repair_frame(msg, fault, checksum, calcsum) if enabled else None
         )
+        if repaired is None:
+            reason = "Checksum error. Expected 0x%04x, got 0x%04x"
+            if fault is not None and not enabled:
+                reason += hint(fault)
+            return reject_msg(msg, reason, calcsum, checksum)
+        msg = repaired
+        (msg_seq, from_addr, to_addr, function) = struct.unpack(
+            "<HLLH", msg[4:MSG_HDR_LEN]
+        )
+        data = msg[MSG_HDR_LEN : MSG_HDR_LEN + data_len]
     return (msg_seq, from_addr, to_addr, function, data)
 
 

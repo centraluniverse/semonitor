@@ -16,6 +16,7 @@ from collections import namedtuple
 import serial.tools.list_ports
 
 import se.logutils
+import se.msg
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,21 @@ def _make_parser():
         help="exit daily at local HH:MM ('default' 01:40) or on the inverter end-of-day 'event'",
     )
 
+    parser.add_argument(
+        "-R",
+        "--repair",
+        dest="repair",
+        action="append",
+        choices=se.msg.REPAIR_LEVELS,
+        default=[],
+        metavar="LEVEL",
+        help=(
+            "repair a frame with one bit wrong, when that is the only fault: "
+            "crc (a bit of the checksum) or data (a bit of the header or data, "
+            "which implies crc). A frame that looks repairable is always logged, "
+            "-R repairs it, repeatable (default: no repair)"
+        ),
+    )
     parser.add_argument(
         "-s",
         "--slave",

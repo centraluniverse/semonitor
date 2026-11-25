@@ -144,7 +144,9 @@ def process_msg(msg, args, mode, state, files):
     is sent when one is due.
     """
     # parse the message
-    (msg_seq, from_addr, to_addr, function, data) = se.msg.parse_msg(msg)
+    (msg_seq, from_addr, to_addr, function, data) = se.msg.parse_msg(
+        msg, args.repair
+    )
     if function == 0:
         # message could not be processed
         logger.data("Ignoring this message")
@@ -295,7 +297,9 @@ def do_commands(args, mode, state, files):
             master_grant(state, files.data, files.rec, args.slaves[0])
         # wait for the response to the command
         (msg, _eof) = se.msg.read_msg(files.data, files.rec, mode, state)
-        (_msg_seq, _from_addr, _to_addr, response, data) = se.msg.parse_msg(msg)
+        (_msg_seq, _from_addr, _to_addr, response, data) = se.msg.parse_msg(
+            msg, args.repair
+        )
         msg_data = se.data.parse_data(response, data)
         # write response to output file
         se.data.write_data(

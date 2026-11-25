@@ -158,6 +158,7 @@ def make_args(**changes):
     args = {
         "xerror": False,
         "commands": [],
+        "repair": [],
         "slaves": [],
         "nadir": None,
     }
@@ -613,6 +614,32 @@ def test_time_reply_has_the_offset_of_the_zone(
         dest=SLAVE,
     )
     assert bytes(files.line.written) == MAGIC + reply
+
+
+# --- process_msg: repair ----------------------------------------------------
+
+# A frame of no data whose checksum has one bit wrong: bit 7 of the high byte
+# was received as 1, the crc level clears it again.
+CRC_HI_WRONG = bytes.fromhex("0000ffffef01ba4c1273feffffff9a038adb")
+
+
+def test_a_frame_with_a_wrong_crc_bit_is_ignored_unless_repaired(
+    sm, files, caplog
+):
+    with caplog.at_level(se.logutils.LOG_LEVEL_DATA):
+        process(sm, CRC_HI_WRONG, files, PASSIVE_MODE)
+
+    assert "Checksum error" in caplog.text
+    assert "Ignoring this message" in caplog.text
+    assert "Repaired frame" not in caplog.text
+
+
+def test_a_repaired_frame_is_processed_as_a_message(sm, files, caplog):
+    with caplog.at_level(se.logutils.LOG_LEVEL_DATA):
+        process(sm, CRC_HI_WRONG, files, PASSIVE_MODE, repair=["crc"])
+
+    assert "Repaired frame seq 495 " in caplog.text
+    assert "Ignoring this message" not in caplog.text
 
 
 # --- process_msg: inverter time ---------------------------------------------

@@ -325,6 +325,17 @@ SolarEdge inverter performance monitoring using the SolarEdge protocol.
                           (data/__date__/out.json)
     -r, --record recfile  file to record all incoming and outgoing messages to
                           (supports __date__ and __datetime__ like -o)
+    -R, --repair LEVEL    repair a frame with one bit wrong, when that is the
+                          only fault: crc (a bit of the checksum) or data (a
+                          bit of the header or data, which implies crc). A
+                          frame that looks repairable is always logged, with
+                          the level that repairs it; -R repairs it, and each
+                          repair is logged as a warning. Repeatable (default:
+                          no repair). A 3 bit error can look like a 1 bit error
+                          in the data, so it is logged as repairable, and with
+                          -R data repaired wrongly: about N / 32768 of random
+                          3 bit errors, N being the covered bits (2% at 72 data
+                          bytes, 12.6% at 504).
     -s, --slave inv[,inv,...]
                           comma delimited list of SolarEdge slave inverter IDs
     -t, --type 2|4        data source type (2=RS232, 4=RS485)

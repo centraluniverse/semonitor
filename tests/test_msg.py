@@ -292,6 +292,440 @@ def test_checksum_error_reports_the_calculated_sum_as_expected(caplog):
     assert logged == f"Checksum error. {sums}"
 
 
+# --- repairing the checksum --------------------------------------------------
+
+# the checksum repairs, the data level is tested on its own
+CRC_ONLY = ("crc",)
+
+
+# Frames of no data from a recording, whose checksum has one bit wrong. index
+# and mask give the byte of the checksum and the bit, as passed to corrupt.
+# direction is the repair: a bit received as 1 is cleared, and a bit received
+# as 0 is set.
+FAMILY_FROM = 0x73124CBA
+FAMILY_TO = 0xFFFFFFFE
+FAMILY_FUNCTION = 0x039A
+WRONG_BIT = [
+    pytest.param(
+        bytes.fromhex("0000ffffef01ba4c1273feffffff9a038adb"),
+        -1,
+        0x80,
+        "1->0",
+        id="hi-7",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff1400ba4c1273feffffff9a0351ff"),
+        -1,
+        0x40,
+        "1->0",
+        id="hi-6",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff4b86ba4c1273feffffff9a036afc"),
+        -1,
+        0x20,
+        "1->0",
+        id="hi-5",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff4803ba4c1273feffffff9a036bfa"),
+        -1,
+        0x10,
+        "1->0",
+        id="hi-4",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffffd54aba4c1273feffffff9a03b06f"),
+        -1,
+        0x08,
+        "1->0",
+        id="hi-3",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffffb101ba4c1273feffffff9a03bfb6"),
+        -1,
+        0x04,
+        "1->0",
+        id="hi-2",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff5f07ba4c1273feffffff9a03d493"),
+        -1,
+        0x02,
+        "1->0",
+        id="hi-1",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff18ccba4c1273feffffff9a037dbf"),
+        -1,
+        0x01,
+        "1->0",
+        id="hi-0",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffff7febba4c1273feffffff9a03fdbf"),
+        -2,
+        0x10,
+        "1->0",
+        id="lo-4",
+    ),
+    pytest.param(
+        bytes.fromhex("0000ffffa06eba4c1273feffffff9a037b12"),
+        -1,
+        0x08,
+        "0->1",
+        id="set-hi-3",
+    ),
+]
+FRAMES_WITH_ONE_BIT_WRONG = [
+    pytest.param(p.values[0], id=p.id) for p in WRONG_BIT
+]
+# A frame of the family with more than one bit wrong, not repaired.
+UNREPAIRABLE = bytes.fromhex("0000ffffa200ba4c1273feffffff9a037df7")
+
+
+def repaired_seq(frame_bytes):
+    return struct.unpack_from("<H", frame_bytes, 4)[0]
+
+
+def checksum_bit(index, mask):
+    # the checksum is little endian, so the last byte is its high byte
+    return (8 if index == -1 else 0) + mask.bit_length() - 1
+
+
+@pytest.mark.parametrize("parse", [se.msg.parse_msg, se.msg.validate_msg])
+@pytest.mark.parametrize(("rx", "index", "mask", "direction"), WRONG_BIT)
+def test_a_checksum_with_one_bit_wrong_is_repaired(
+    caplog, parse, rx, index, mask, direction
+):
+    seq = repaired_seq(rx)
+    expected = corrupt(rx, index, mask)  # the frame as it was sent
+
+    assert parse(rx, CRC_ONLY) == (
+        seq,
+        FAMILY_FROM,
+        FAMILY_TO,
+        FAMILY_FUNCTION,
+        b"",
+    )
+
+    assert (
+        se.msg.format_msg(seq, FAMILY_FROM, FAMILY_TO, FAMILY_FUNCTION)
+        == expected
+    )
+    (logged,) = messages(caplog, logging.WARNING)
+    assert logged.startswith(f"Repaired frame seq {seq} ")
+    assert f"checksum bit {checksum_bit(index, mask)} {direction}, " in logged
+
+
+@pytest.mark.parametrize("rx", FRAMES_WITH_ONE_BIT_WRONG)
+def test_a_checksum_is_not_repaired_unless_the_repair_is_enabled(caplog, rx):
+    assert se.msg.parse_msg(rx) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+    (logged,) = messages(caplog, logging.ERROR)
+    assert logged.startswith("Checksum error.")
+
+
+@pytest.mark.parametrize(
+    ("checksum", "calcsum"),
+    [
+        pytest.param(0x1234, 0x1234, id="no-bit"),
+        pytest.param(0x0003, 0x0000, id="two-bits"),
+    ],
+)
+def test_a_checksum_without_one_bit_wrong_has_no_fault(checksum, calcsum):
+    assert se.msg.find_fault(checksum, calcsum, 0, len(GOOD)) is None
+
+
+@pytest.mark.parametrize(
+    ("checksum", "calcsum", "fault"),
+    [
+        pytest.param(0x0001, 0x0000, ("crc", None, 0x0001, "1->0"), id="lost"),
+        pytest.param(
+            0x0000, 0x8000, ("crc", None, 0x8000, "0->1"), id="gained"
+        ),
+    ],
+)
+def test_find_fault_gives_the_checksum_bit_and_its_direction(
+    checksum, calcsum, fault
+):
+    found = se.msg.find_fault(checksum, calcsum, 0, len(GOOD))
+
+    assert found == se.msg.Fault(*fault)
+
+
+# frames of 4095 bytes are within REPAIR_MAX_BITS, 4096 bytes are not
+@pytest.mark.parametrize(
+    ("data_len", "repaired"),
+    [
+        pytest.param(4095 - 18, True, id="at-the-limit"),
+        pytest.param(4096 - 18, False, id="above"),
+    ],
+)
+def test_a_frame_is_repaired_only_within_the_limit(data_len, repaired):
+    rx = bytes(
+        corrupt(
+            se.msg.format_msg(
+                1, FAMILY_FROM, FAMILY_TO, FAMILY_FUNCTION, bytes(data_len)
+            ),
+            -1,
+            0x01,
+        )
+    )
+
+    assert (se.msg.parse_msg(rx, CRC_ONLY) != NOTHING) == repaired
+
+
+@pytest.mark.parametrize(
+    "flips",
+    [
+        pytest.param([(-1, 0x03)], id="two-bits-high"),
+        pytest.param([(-2, 0x81)], id="two-bits-low"),
+        pytest.param([(-1, 0x01), (-2, 0x01)], id="one-bit-in-each-byte"),
+    ],
+)
+def test_a_checksum_with_more_than_one_bit_wrong_is_not_repaired(caplog, flips):
+    rx = bytes(se.msg.format_msg(1, FAMILY_FROM, FAMILY_TO, FAMILY_FUNCTION))
+    for index, mask in flips:
+        rx = corrupt(rx, index, mask)
+
+    assert se.msg.parse_msg(rx, CRC_ONLY) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+
+
+def test_a_frame_with_unexplained_bits_is_not_repaired(caplog):
+    assert se.msg.parse_msg(UNREPAIRABLE, CRC_ONLY) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+    (logged,) = messages(caplog, logging.ERROR)
+    assert logged.startswith("Checksum error.")
+
+
+@pytest.mark.parametrize(
+    ("msg", "index", "mask"),
+    [
+        pytest.param(GOOD, 17, 0x04, id="data"),
+        pytest.param(GOOD, 4, 0x04, id="sequence"),
+        pytest.param(GOOD, 8, 0x04, id="source"),
+    ],
+)
+def test_a_damaged_frame_other_than_its_checksum_is_not_repaired(
+    caplog, msg, index, mask
+):
+    rx = corrupt(msg, index, mask)
+
+    assert se.msg.parse_msg(rx, CRC_ONLY) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+
+
+@pytest.mark.parametrize("rx", FRAMES_WITH_ONE_BIT_WRONG[:1])
+def test_a_checksum_is_not_repaired_when_the_message_is_longer(caplog, rx):
+    longer = rx + b"\x00"
+
+    assert se.msg.parse_msg(longer, CRC_ONLY) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+
+
+def test_payload_bit_flips_are_never_repaired():
+    msg = frame(1, bytes(range(1, 65)))
+    payload = [(16 + i // 8, 1 << i % 8) for i in range(8 * 64)]
+    checksum = [(-2, 1 << k) for k in range(8)] + [
+        (-1, 1 << k) for k in range(8)
+    ]
+    # every single payload bit, pairs of them, and a payload bit with a CRC bit
+    flips = [[flip] for flip in payload]
+    flips += [
+        [payload[i], payload[j]]
+        for i in range(len(payload))
+        for j in (i + 1, i + 2, i + 3, i + 97)
+        if j < len(payload)
+    ]
+    flips += [[flip, bit] for flip in payload for bit in checksum]
+
+    for flip in flips:
+        rx = msg
+        for index, mask in flip:
+            rx = corrupt(rx, index, mask)
+        assert se.msg.validate_msg(rx, CRC_ONLY) == NOTHING
+
+
+# --- repairing a bit of the header or data -----------------------------------
+
+# A bit of the sequence, addresses, function or data. The data level implies
+# the checksum level, so it is tested on its own too.
+DATA_ONLY = ("data",)
+DATA_FRAMES = [
+    pytest.param(frame(1, bytes(range(64))), id="data"),
+    pytest.param(frame(3), id="no-data"),
+]
+
+
+def covered_bits(msg):
+    """Return the bits of the sequence, addresses, function and data of msg."""
+    return [
+        (index, 1 << bit)
+        for index in range(4, len(msg) - 2)
+        for bit in range(8)
+    ]
+
+
+@pytest.mark.parametrize("levels", [se.msg.REPAIR_LEVELS, DATA_ONLY])
+@pytest.mark.parametrize("msg", DATA_FRAMES)
+def test_a_bit_of_the_header_or_data_is_repaired(caplog, msg, levels):
+    caplog.set_level(logging.WARNING, logger="se.msg")
+    expected = se.msg.validate_msg(msg)
+    assert expected != NOTHING
+
+    for index, mask in covered_bits(msg):
+        caplog.clear()
+        rx = corrupt(msg, index, mask)
+
+        assert se.msg.parse_msg(rx, levels) == expected
+        (logged,) = messages(caplog, logging.WARNING)
+        assert f"frame byte {index} bit {mask.bit_length() - 1}," in logged
+
+
+@pytest.mark.parametrize("levels", [CRC_ONLY, DATA_ONLY])
+@pytest.mark.parametrize("msg", DATA_FRAMES)
+def test_a_checksum_bit_is_repaired_by_the_data_level_too(msg, levels):
+    expected = se.msg.validate_msg(msg)
+
+    for index in (-2, -1):
+        for bit in range(8):
+            rx = corrupt(msg, index, 1 << bit)
+            assert se.msg.parse_msg(rx, levels) == expected
+
+
+@pytest.mark.parametrize("levels", [CRC_ONLY, ()])
+@pytest.mark.parametrize("msg", DATA_FRAMES)
+def test_a_bit_of_the_header_or_data_is_not_repaired_without_its_level(
+    msg, levels
+):
+    for index, mask in covered_bits(msg):
+        assert se.msg.parse_msg(corrupt(msg, index, mask), levels) == NOTHING
+
+
+def test_a_pair_of_bits_of_the_header_or_data_is_not_repaired(caplog):
+    caplog.set_level(logging.WARNING, logger="se.msg")
+    msg = frame(1, bytes(range(4)))
+    bits = covered_bits(msg)
+
+    for pos, (index, mask) in enumerate(bits):
+        for other, other_mask in bits[pos + 1 :]:
+            rx = corrupt(corrupt(msg, index, mask), other, other_mask)
+            assert se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+
+
+@pytest.mark.parametrize("stride", [1, 8, 63])
+def test_a_pair_of_bits_of_a_long_frame_is_not_repaired(caplog, stride):
+    caplog.set_level(logging.WARNING, logger="se.msg")
+    msg = frame(1, bytes(range(64)))
+    bits = covered_bits(msg)
+
+    for pos in range(len(bits) - stride):
+        (index, mask) = bits[pos]
+        (other, other_mask) = bits[pos + stride]
+        rx = corrupt(corrupt(msg, index, mask), other, other_mask)
+        assert se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) == NOTHING
+
+    assert not messages(caplog, logging.WARNING)
+
+
+@pytest.mark.parametrize(
+    ("data_len", "repaired"),
+    [
+        pytest.param(4077, True, id="at-the-limit"),
+        pytest.param(4078, False, id="above"),
+    ],
+)
+def test_a_data_frame_is_repaired_only_within_the_limit(data_len, repaired):
+    rx = corrupt(frame(1, bytes(data_len)), 20, 0x01)
+
+    assert (se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) != NOTHING) == repaired
+
+
+def test_a_frame_with_trailing_bytes_is_not_repaired_in_its_data():
+    rx = corrupt(frame(1, bytes(range(4))), 20, 0x01) + b"\x00"
+
+    assert se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) == NOTHING
+
+
+@pytest.mark.parametrize("msg", DATA_FRAMES)
+def test_a_length_field_is_not_repaired(msg):
+    for index in range(4):
+        for bit in range(8):
+            rx = corrupt(msg, index, 1 << bit)
+            assert se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) == NOTHING
+
+
+# --- saying when a frame looks repairable ------------------------------------
+
+
+def test_a_checksum_bit_that_looks_repairable_is_named_with_its_level(caplog):
+    caplog.set_level(logging.ERROR, logger="se.msg")
+    rx = corrupt(GOOD, -1, 0x80)
+    direction = "1->0" if rx[-1] & 0x80 else "0->1"
+
+    assert se.msg.parse_msg(rx) == NOTHING
+
+    (logged,) = messages(caplog, logging.ERROR)
+    assert logged.startswith("Checksum error.")
+    assert logged.endswith(
+        f", looks repairable with -R crc: checksum bit 15 {direction}"
+    )
+
+
+@pytest.mark.parametrize("levels", [(), CRC_ONLY])
+def test_a_covered_bit_that_looks_repairable_is_named_with_the_data_level(
+    caplog, levels
+):
+    caplog.set_level(logging.ERROR, logger="se.msg")
+
+    assert se.msg.parse_msg(corrupt(GOOD, 17, 0x04), levels) == NOTHING
+
+    (logged,) = messages(caplog, logging.ERROR)
+    assert logged.endswith(
+        ", looks repairable with -R data: frame byte 17 bit 2"
+    )
+
+
+@pytest.mark.parametrize(
+    "rx",
+    [
+        pytest.param(corrupt(corrupt(GOOD, 17, 1), 18, 1), id="two-bits"),
+        pytest.param(corrupt(GOOD, 17, 4) + b"\x00", id="trailing-byte"),
+        pytest.param(
+            corrupt(frame(1, bytes(4078)), 20, 1), id="over-the-limit"
+        ),
+        pytest.param(corrupt(GOOD, 0, 0x01), id="length-field"),
+    ],
+)
+def test_a_frame_that_is_not_repairable_has_no_hint(caplog, rx):
+    caplog.set_level(logging.ERROR, logger="se.msg")
+
+    assert se.msg.parse_msg(rx, se.msg.REPAIR_LEVELS) == NOTHING
+
+    assert not [m for m in messages(caplog, logging.ERROR) if "looks" in m]
+
+
+def test_a_repairable_frame_is_repaired_without_an_error(caplog):
+    caplog.set_level(logging.WARNING, logger="se.msg")
+
+    assert se.msg.parse_msg(
+        corrupt(GOOD, 17, 0x04), DATA_ONLY
+    ) == se.msg.parse_msg(GOOD)
+
+    assert not messages(caplog, logging.ERROR)
+    (logged,) = messages(caplog, logging.WARNING)
+    assert "frame byte 17 bit 2, checksum" in logged
+
+
 # --- reading messages --------------------------------------------------------
 
 

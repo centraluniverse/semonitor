@@ -118,6 +118,7 @@ def test_defaults_without_arguments(get_args):
         "nadir": None,
         "outfile": "stdout",
         "record": None,
+        "repair": [],
         "slaves": [],
         "type": None,
         "verbose": 0,
@@ -138,6 +139,70 @@ def test_plain_options_are_stored(get_args):
     assert args.record == "rec.bin"
     assert args.xerror
     assert mode == run_mode(following=True)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(["-R", "crc"], id="short"),
+        pytest.param(["--repair", "crc"], id="long"),
+        pytest.param(["--repair=crc"], id="long-equals"),
+    ],
+)
+def test_repair_takes_the_crc_level(get_args, argv):
+    args, _ = get_args(*argv)
+
+    assert args.repair == ["crc"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(["-R", "data"], id="short"),
+        pytest.param(["--repair=data"], id="long-equals"),
+    ],
+)
+def test_repair_takes_the_data_level(get_args, argv):
+    args, _ = get_args(*argv)
+
+    assert args.repair == ["data"]
+
+
+def test_repair_is_repeatable(get_args):
+    args, _ = get_args("-R", "crc", "--repair", "crc")
+
+    assert args.repair == ["crc", "crc"]
+
+
+def test_repair_levels_can_be_combined(get_args):
+    args, _ = get_args("-R", "crc", "-R", "data")
+
+    assert args.repair == ["crc", "data"]
+
+
+def test_repair_help_says_what_each_level_repairs(get_args, capsys):
+    with pytest.raises(SystemExit):
+        get_args("--help")
+    help_text = " ".join(capsys.readouterr().out.split())
+
+    assert "a bit of the header or data" in help_text
+    assert "is always logged" in help_text
+
+
+def test_repair_is_off_by_default(get_args):
+    args, _ = get_args()
+
+    assert args.repair == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "all", "CRC", "crc-hi", "crc-lo", "crc-set", "crc,crc", "1"],
+)
+def test_repair_rejects_other_levels(usage_error, value):
+    message = usage_error("-R", value)
+
+    assert message.startswith("argument -R/--repair: invalid choice: ")
 
 
 def test_run_mode_has_a_name_for_each_field():
@@ -446,6 +511,7 @@ def test_verbose_dumps_the_default_arguments(get_args, capsys):
         "nadir: None\n"
         "outfile: stdout\n"
         "record: None\n"
+        "repair: []\n"
         "slaves: \n"
         "type: None\n"
         "verbose: 1\n"
@@ -470,6 +536,7 @@ def test_verbose_dumps_all_arguments_sorted_by_name(get_args, capsys):
         "nadir: None\n"
         "outfile: out.json\n"
         "record: rec.bin\n"
+        "repair: []\n"
         "slaves: 7f\n"
         "type: None\n"
         "verbose: 1\n"
