@@ -177,9 +177,13 @@ def startMaster(args):
     logger.info("starting %s", MASTER_THREAD_NAME)
 
 # wait until keyboard interrupt
-def block(state):
+def block(state, readThread=None):
     try:
         while True:
+            # a read thread that stopped lost its input, which is an error
+            if readThread is not None and not readThread.is_alive():
+                se.logutils.dumpState(state)
+                terminate(1, "Reading stopped, the input was lost")
             time.sleep(1)
     except KeyboardInterrupt:
         se.logutils.dumpState(state)
@@ -248,7 +252,7 @@ if __name__ == "__main__":
             if args.master:  # send RS485 master commands
                 startMaster(args=(state, dataFile, recFile, args.slaves))
             # wait for termination
-            block(state)
+            block(state, readThread)
 
     # cleanup
     se.files.closeData(dataFile)

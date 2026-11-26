@@ -600,7 +600,6 @@ def test_rs232_does_not_take_a_frame_without_the_magic_number(
 
 # A port that is lost is a failure, so that a container is restarted, or
 # the user notices. The unplugged port is how the other tests end the data.
-@pytest.mark.xfail(strict=True, reason="Issue #64")
 def test_a_lost_rs485_port_is_a_failure(serial_run):
     run = serial_run("4")
 
