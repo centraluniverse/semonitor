@@ -478,34 +478,27 @@ def test_read_bytes_treats_the_end_of_file_as_empty(caplog, record):
         assert recfile.getvalue() == b""
 
 
-def test_read_bytes_treats_exceptions_as_the_end_of_file(caplog):
-    caplog.set_level(logging.INFO, logger="se.msg")
-
+def test_read_bytes_raises_a_read_error_instead_of_ending_the_data():
     def read(_size):
         msg = "disk on fire"
         raise OSError(msg)
 
     infile = types.SimpleNamespace(read=read)
 
-    data = se.msg.readBytes(infile, None, 3, run_mode(passive=True), {})
-
-    assert data == b""
-    assert messages(caplog, logging.INFO) == [
-        "Exception while reading data: disk on fire"
-    ]
+    with pytest.raises(OSError, match="disk on fire"):
+        se.msg.readBytes(infile, None, 3, run_mode(passive=True), {})
 
 
-def test_read_bytes_treats_a_failing_record_file_as_the_end_of_file():
+def test_read_bytes_raises_a_failing_record_file_instead_of_ending_the_data():
     class Failing(io.BytesIO):
         def write(self, _data):
             msg = "no space left"
             raise OSError(msg)
 
-    data = se.msg.readBytes(
-        make_file(b"abc"), Failing(), 3, run_mode(passive=True), {}
-    )
-
-    assert data == b""
+    with pytest.raises(OSError, match="no space left"):
+        se.msg.readBytes(
+            make_file(b"abc"), Failing(), 3, run_mode(passive=True), {}
+        )
 
 
 def test_read_bytes_waits_for_the_file_to_grow_when_following(monkeypatch):

@@ -177,6 +177,30 @@ def startMaster(args):
     masterThread.start()
     logger.info("starting %s", MASTER_THREAD_NAME)
 
+def readInput(args, mode, state, dataFile, recFile, outFile):
+    """
+    Read the input, and log the device that failed if it does.
+
+    Returns:
+        True at the end of the input, False when reading the input failed.
+    """
+    try:
+        readData(args, mode, state, dataFile, recFile, outFile)
+    except OSError as ex:
+        error = ex
+    else:
+        return True
+    se.files.closeData(dataFile)
+    logger.error("Reading %s failed: %s", dataFile.name, error)
+    return False
+
+
+def readPassive(args, mode, state, dataFile, recFile, outFile):
+    """Read the input to its end, and exit with an error if that fails."""
+    if not readInput(args, mode, state, dataFile, recFile, outFile):
+        terminate(1, "Reading the input failed, exiting")
+
+
 # wait until keyboard interrupt
 def block(state, readThread=None):
     try:
@@ -236,7 +260,7 @@ def main():
     # figure out what to do based on the mode of operation
     if mode.passiveMode:  # only reading from file or serial device
         # read until eof then terminate
-        readData(args, mode, state, dataFile, recFile, outFile)
+        readPassive(args, mode, state, dataFile, recFile, outFile)
     else:  # reading and writing to a serial device
         if args.commands:  # commands were specified
             # perform commands then terminate
@@ -245,7 +269,7 @@ def main():
             # start a separate thread for reading
             readThread = threading.Thread(
                 name=READ_THREAD_NAME,
-                target=readData,
+                target=readInput,
                 args=(args, mode, state, dataFile, recFile, outFile))
             readThread.daemon = True
             readThread.start()

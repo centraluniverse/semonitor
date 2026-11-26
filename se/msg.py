@@ -59,22 +59,19 @@ def readMsg(inFile, recFile, mode, state):
 
 # return the specified number of bytes
 def readBytes(inFile, recFile, length, mode, state):
+    # read and write errors are raised, as they are not the end of the data
     se.logutils.setState(state, "readLength", length)
-    try:
-        inBuf = bytes(inFile.read(length))
-        if not inBuf:  # end of file
-            if mode.following:
-                # wait for more data
-                while not inBuf:
-                    time.sleep(sleepInterval)
-                    inBuf = inFile.read(length)
-        recordMsg(inBuf, recFile)
+    inBuf = bytes(inFile.read(length))
+    if not inBuf:  # end of file
+        if mode.following:
+            # wait for more data
+            while not inBuf:
+                time.sleep(sleepInterval)
+                inBuf = inFile.read(length)
+    recordMsg(inBuf, recFile)
+    if inBuf:  # keep the last byte read at the end of file
         se.logutils.setState(state, "lastByteRead", "{:02x}".format(bytearray(inBuf)[-1]))
-        return inBuf
-    # treat exceptions as end of file
-    except Exception as ex:
-        logger.info("Exception while reading data: "+str(ex))
-        return b""
+    return inBuf
 
 # parse a message
 def parseMsg(msg):

@@ -42,7 +42,6 @@ LENGTH_ERRORS = (
 )
 CHECKSUM_ERRORS = ("Checksum error",)
 EXTRA_BYTES = ("extra bytes",)
-TRUNCATED = ("too short", "Data length is too big for the message")
 ANY_ERROR = (*LENGTH_ERRORS, *CHECKSUM_ERRORS, "too short", "Failed to parse")
 
 # Pyserial only lists the real ports, so the pseudo terminal is added to the
@@ -492,31 +491,33 @@ def test_noise_before_the_first_frame_is_skipped(serial_run, recording, noise):
 
 @pytest.mark.parametrize("tty_type", TTY_TYPES)
 @pytest.mark.parametrize(
-    ("cut", "errors"),
+    "cut",
     [
-        pytest.param(2, None, id="inside-the-magic"),
-        pytest.param(4, None, id="after-the-magic"),
-        pytest.param(10, None, id="inside-the-header"),
-        pytest.param(20, TRUNCATED, id="after-the-header"),
-        pytest.param(IN_THE_DATA, TRUNCATED, id="inside-the-data"),
-        pytest.param(CHECKSUM_HIGH, TRUNCATED, id="inside-the-checksum"),
+        pytest.param(2, id="inside-the-magic"),
+        pytest.param(4, id="after-the-magic"),
+        pytest.param(10, id="inside-the-header"),
+        pytest.param(20, id="after-the-header"),
+        pytest.param(IN_THE_DATA, id="inside-the-data"),
+        pytest.param(CHECKSUM_HIGH, id="inside-the-checksum"),
     ],
 )
 def test_a_frame_cut_off_by_the_end_of_the_line_is_lost(
-    serial_run, recording, tty_type, cut, errors
+    serial_run, recording, tty_type, cut
 ):
     run = serial_run(tty_type)
+    port = os.ttyname(run.slave)  # not readable once the line is unplugged
     unit = recording.unit(LAST)
     stream = recording.stream(upto=LAST) + unit[: cut % len(unit)]
 
     converted(run, recording, stream, upto=LAST)
 
+    # a lost line is a failure, and the log names the device that was lost
+    assert run.proc.returncode not in (None, 0), run.log
+    assert port in run.log
     # RS232 only records what it has read whole, so not a cut off message.
     assert stream.startswith(run.received())
     if not run.active:
         assert run.received() == stream
-    if errors:
-        assert run.rejected(errors), run.log
 
 
 # The 4 byte integer of the first meter, that is 0 in the recording, is
