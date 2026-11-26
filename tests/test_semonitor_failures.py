@@ -45,6 +45,7 @@ def test_a_missing_input_file_is_a_failure(workdir):
 
     assert result.returncode != 0
     assert "missing.rec" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_a_port_that_can_not_be_opened_is_a_failure(workdir):
@@ -54,6 +55,7 @@ def test_a_port_that_can_not_be_opened_is_a_failure(workdir):
 
     assert result.returncode != 0
     assert port in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 @pytest.mark.parametrize("option", ["-o", "-r"])
@@ -66,3 +68,23 @@ def test_an_output_file_that_can_not_be_created_is_a_failure(
 
     assert result.returncode != 0
     assert "blocker" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_a_reader_that_closes_the_output_is_a_failure(golden):
+    (read_fd, write_fd) = os.pipe()
+    os.close(read_fd)  # the reader is gone before semonitor writes to it
+    process = subprocess.Popen(
+        [sys.executable, str(SEMONITOR), golden("rec", SAMPLE)],
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")},
+        stdin=subprocess.DEVNULL,
+        stdout=write_fd,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    os.close(write_fd)
+    (_, stderr) = process.communicate(timeout=DEADLINE)
+
+    assert process.returncode != 0
+    assert "reader of the output is gone" in stderr
+    assert "Traceback" not in stderr

@@ -13,6 +13,7 @@ import se.msg
 import se.data
 import se.commands
 import logging
+import os
 from builtins import bytes
 
 logger = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ def nextSeq():
     return seq
 
 
-if __name__ == "__main__":
+def main():
     # create the state variables with timestamps
     state = {}
     se.logutils.setState(state, "readThread", False)
@@ -257,3 +258,14 @@ if __name__ == "__main__":
     # cleanup
     se.files.closeData(dataFile)
     se.files.closeOutFiles(recFile, outFile)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BrokenPipeError:
+        # the reader is gone, so nothing may be flushed to it at exit
+        os.dup2(os.open(os.devnull, os.O_WRONLY), 1)  # the stdout descriptor
+        terminate(1, "The reader of the output is gone")
+    except OSError as ex:
+        terminate(1, str(ex))
