@@ -608,7 +608,6 @@ def test_a_lost_rs485_port_is_a_failure(serial_run):
     assert run.wait_for_exit(EXIT_WAIT) not in (None, 0), run.log
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #65")
 def test_a_lost_rs232_port_is_a_failure(serial_run):
     run = serial_run("2")
 
