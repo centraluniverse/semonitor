@@ -1408,3 +1408,39 @@ def test_record_msg_appends_to_the_file():
 
 def test_record_msg_without_a_file_does_nothing():
     assert se.msg.record_msg(b"ab", None) is None
+
+
+# --- counting the messages rejected and repaired -----------------------------
+
+
+def test_the_tally_counts_rejected_and_repaired_messages():
+    se.msg.TALLY.take_summary()  # start from zero
+    data_flip = corrupt(GOOD, 17, 0x04)
+
+    se.msg.parse_msg(data_flip)
+    se.msg.parse_msg(corrupt(GOOD, -1, 0x80))
+    se.msg.parse_msg(data_flip, DATA_ONLY)
+
+    assert se.msg.TALLY.take_summary() == (
+        logging.ERROR,
+        "2 messages rejected (1 look repairable with -R crc, 1 with -R data), 0 repaired at level crc, 1 at level data",
+    )
+
+
+def test_a_summary_of_repairs_only_is_a_warning():
+    se.msg.TALLY.take_summary()
+
+    se.msg.parse_msg(corrupt(GOOD, -1, 0x80), CRC_ONLY)
+
+    assert se.msg.TALLY.take_summary() == (
+        logging.WARNING,
+        "0 messages rejected (0 look repairable with -R crc, 0 with -R data), 1 repaired at level crc, 0 at level data",
+    )
+
+
+def test_a_valid_frame_is_not_counted():
+    se.msg.TALLY.take_summary()
+
+    se.msg.parse_msg(GOOD)
+
+    assert se.msg.TALLY.take_summary() is None

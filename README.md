@@ -335,7 +335,8 @@ SolarEdge inverter performance monitoring using the SolarEdge protocol.
                           in the data, so it is logged as repairable, and with
                           -R data repaired wrongly: about N / 32768 of random
                           3 bit errors, N being the covered bits (2% at 72 data
-                          bytes, 12.6% at 504).
+                          bytes, 12.6% at 504). At the end of a run the counts
+                          of rejected and repaired messages are logged.
     -s, --slave inv[,inv,...]
                           comma delimited list of SolarEdge slave inverter IDs
     -t, --type 2|4        data source type (2=RS232, 4=RS485)

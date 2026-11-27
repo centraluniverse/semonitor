@@ -1719,3 +1719,89 @@ def test_a_file_is_read_without_waiting_for_a_valid_time(
 
     assert result.returncode == 0
     assert Path("out.json").read_bytes() == golden("json", sample).read_bytes()
+
+
+# --- the summary at the end of a run ----------------------------------------
+
+# an acknowledgment, without data, and the bits to damage in it
+SUMMARY_FRAME = frame(0x0080)
+CHECKSUM_BIT = (-1, 0x80)  # looks repairable with -R crc
+DATA_BIT = (6, 0x01)  # looks repairable with -R data, frame byte 6 bit 0
+
+
+def recording_of(workdir, msg):
+    (workdir / "in.rec").write_bytes(MAGIC + msg)
+
+
+def flip_at(msg, index, mask):
+    broken = bytearray(msg)
+    broken[index] ^= mask
+    return bytes(broken)
+
+
+def test_a_run_without_rejected_or_repaired_messages_has_no_summary(
+    run_semonitor, workdir
+):
+    recording_of(workdir, SUMMARY_FRAME)
+
+    result = run_semonitor("-x", "-o", "out.json", "in.rec")
+
+    assert result.returncode == 0
+    assert "messages rejected" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("bit", "counts"),
+    [
+        pytest.param(
+            CHECKSUM_BIT,
+            "1 messages rejected (1 look repairable with -R crc, 0 with -R data), "
+            "0 repaired at level crc, 0 at level data",
+            id="checksum-bit",
+        ),
+        pytest.param(
+            DATA_BIT,
+            "1 messages rejected (0 look repairable with -R crc, 1 with -R data), "
+            "0 repaired at level crc, 0 at level data",
+            id="data-bit",
+        ),
+    ],
+)
+def test_a_rejected_frame_that_looks_repairable_is_counted_by_level(
+    run_semonitor, workdir, bit, counts
+):
+    recording_of(workdir, flip_at(SUMMARY_FRAME, *bit))
+
+    result = run_semonitor("-x", "-o", "out.json", "in.rec")
+
+    assert result.returncode == 0
+    assert counts in result.stderr
+    assert Path("out.json").read_bytes() == b""
+
+
+def test_a_repaired_frame_is_counted_with_the_level_that_repaired_it(
+    run_semonitor, workdir
+):
+    recording_of(workdir, flip_at(SUMMARY_FRAME, *DATA_BIT))
+
+    result = run_semonitor("-v", "-x", "-R", "data", "-o", "out.json", "in.rec")
+
+    assert result.returncode == 0
+    assert (
+        "0 messages rejected (0 look repairable with -R crc, 0 with -R data), "
+        "0 repaired at level crc, 1 at level data"
+    ) in result.stderr
+
+
+def test_a_repaired_checksum_bit_is_counted_at_the_crc_level(
+    run_semonitor, workdir
+):
+    recording_of(workdir, flip_at(SUMMARY_FRAME, *CHECKSUM_BIT))
+
+    result = run_semonitor("-v", "-x", "-R", "crc", "-o", "out.json", "in.rec")
+
+    assert result.returncode == 0
+    assert (
+        "0 messages rejected (0 look repairable with -R crc, 0 with -R data), "
+        "1 repaired at level crc, 0 at level data"
+    ) in result.stderr

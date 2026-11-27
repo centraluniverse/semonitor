@@ -10,6 +10,7 @@ import logging
 import select
 import struct
 import sys
+import threading
 import time
 import weakref
 from collections import deque
@@ -412,6 +413,66 @@ def read_bytes(in_file, rec_file, length, mode, state):
     return in_buf
 
 
+class Tally:
+    """
+    Count the messages rejected and repaired, for the summary of a run.
+
+    The reader can run in a thread, so the counts are kept under a lock.
+    """
+
+    def __init__(self):
+        """Start the counts at zero."""
+        self._lock = threading.Lock()
+        self._clear()
+
+    def _clear(self):
+        self.rejected = 0
+        self.looks = dict.fromkeys(REPAIR_LEVELS, 0)
+        self.repaired = dict.fromkeys(REPAIR_LEVELS, 0)
+
+    def add_rejected(self):
+        """Count a rejected message."""
+        with self._lock:
+            self.rejected += 1
+
+    def add_looks(self, level):
+        """Count a rejected message that looks repairable at the level."""
+        with self._lock:
+            self.looks[level] += 1
+
+    def add_repaired(self, level):
+        """Count a message that is repaired at the level."""
+        with self._lock:
+            self.repaired[level] += 1
+
+    def take_summary(self):
+        """
+        Return the summary of the counts, and clear them.
+
+        Returns:
+            A tuple (level, text) for the log, or None if nothing was counted.
+        """
+        with self._lock:
+            rejected, looks, repaired = (
+                self.rejected,
+                dict(self.looks),
+                dict(self.repaired),
+            )
+            self._clear()
+        if not rejected and not any(repaired.values()):
+            return None
+        text = (
+            f"{rejected} messages rejected ({looks['crc']} look repairable "
+            f"with -R crc, {looks['data']} with -R data), "
+            f"{repaired['crc']} repaired at level crc, "
+            f"{repaired['data']} at level data"
+        )
+        return (logging.ERROR if rejected else logging.WARNING, text)
+
+
+TALLY = Tally()
+
+
 def parse_msg(msg, repair=()):
     """
     Parse a message into its sequence, addresses, function and data.
@@ -430,6 +491,7 @@ def parse_msg(msg, repair=()):
         len(msg) < MSG_HDR_LEN + CHECKSUM_LEN
     ):  # throw out messages that are too short
         logger.data("Threw out a message that was too short")
+        TALLY.add_rejected()
         return (0, 0, 0, 0, b"")
     (msg_seq, from_addr, to_addr, function, data) = validate_msg(msg, repair)
     return (msg_seq, from_addr, to_addr, function, data)
@@ -442,6 +504,7 @@ def reject_msg(msg, reason, *args):
     Returns:
         The empty message tuple (0, 0, 0, 0, b"").
     """
+    TALLY.add_rejected()
     logger.error(reason, *args)
     for line in se.logutils.format_data(msg):
         logger.data(line)
@@ -626,6 +689,7 @@ def repair_frame(msg, fault, checksum, calcsum):
         checksum,
         calcsum,
     )
+    TALLY.add_repaired(fault.level)
     return bytes(fixed)
 
 
@@ -698,6 +762,7 @@ def validate_msg(msg, repair=()):
         if repaired is None:
             reason = "Checksum error. Expected 0x%04x, got 0x%04x"
             if fault is not None and not enabled:
+                TALLY.add_looks(fault.level)
                 reason += hint(fault)
             return reject_msg(msg, reason, calcsum, checksum)
         msg = repaired

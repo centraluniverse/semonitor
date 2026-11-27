@@ -52,8 +52,16 @@ class Files:
     out: object  # the file to write the JSON to
 
 
+def log_summary():
+    """Log the messages rejected and repaired since the last summary, if any."""
+    summary = se.msg.TALLY.take_summary()
+    if summary is not None:
+        logger.log(*summary)
+
+
 def terminate(code=0, msg=b""):
     """Log msg, at info level for code 0 or error level otherwise, and exit."""
+    log_summary()
     if code == 0:
         logger.info(msg)
     else:
@@ -431,6 +439,7 @@ def main(argv=None):
     """
     # create the state variables with timestamps
     state = {}
+    se.msg.TALLY.take_summary()  # the counts of this run start at zero
     se.logutils.set_state(state, "readThread", value=False)
     se.logutils.set_state(state, "masterThread", value=False)
     se.logutils.set_state(state, "masterTimer", value=False)
@@ -505,6 +514,7 @@ def main(argv=None):
     # cleanup
     se.files.close_data(data_file)
     se.files.close_out_files(rec_file, out_file)
+    log_summary()
 
 
 if __name__ == "__main__":
