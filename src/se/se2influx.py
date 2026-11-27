@@ -33,7 +33,7 @@ class InfluxParams:
     host: str
     port: int
     username: str
-    password: str
+    password: str | None
     database: str
     ssl: bool
     verify_ssl: bool
@@ -412,8 +412,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     db_args.add_argument(
         "-W",
         "--password",
-        help="password of the user",
-        default="root",
+        help="password of the user (default: none)",
     )
     db_args.add_argument(
         "--database", help="database name to connect to", default="semonitor"

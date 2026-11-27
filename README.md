@@ -732,7 +732,7 @@ Read semonitor output and write it to an InfluxDB, and optionally a log file.
     -H, --host HOST         hostname to connect to InfluxDB (default: localhost)
     -p, --port PORT         port to connect to InfluxDB (default: 8086)
     -u, --username USER     username to connect as (default: root)
-    -W, --password PASSWORD password of the user (default: root)
+    -W, --password PASSWORD password of the user (default: none)
     -h, --help              show the help message and exit
 ```
 
@@ -984,7 +984,7 @@ semonitor <your-semonitor-args> | pee \
   remove `"cat"` to run quietly.
 * **Dummy credentials:** Even with anonymous access enabled on Mosquitto,
   `se2mqtt` requires all of its options, so `-u` and `-W` have to be given.
-  `se2influx` defaults to the user and password `root`.
+  `se2influx` defaults to the user `root` and no password.
 * **State file:** `se2state` needs `-S` to know where to keep its state, and
   `-s` with the serial numbers of the inverters the first time, to create it.
 * **Options:** every tool answers `-h` and `--help`, and lists its options
