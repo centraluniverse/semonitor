@@ -1,0 +1,313 @@
+"""
+Send SolarEdge performance metrics to Graphite.
+
+By default the metrics are sent to the Graphite/carbon pickle listener port
+(usually 2004), which accepts batches of metrics in a pickled nested list of
+tuples format. With the -e option they are sent to the plain text listener
+port (usually 2003) instead, one metric at a time.
+
+The `Metrics` class converts a nested dictionary (such as produced by
+`json.loads` on some SolarEdge traffic that has been processed by semonitor)
+into the nested list of tuples structure expected by carbon. `send_pickle`
+pickles it, adds the requisite header, and sends it to Graphite, `send_text`
+sends each of the metrics as a line of text.
+
+You may need to adjust the delay parameter, depending upon the capacity and
+busyness of the Graphite server. I have found 0.2 works fine **for me** in
+production mode, when I am "following" some existing metrics in real time, as
+the SolarEdge inverter emits them, but I needed to increase it to as much as
+5.0 the first time I sent a new batch of metrics to Graphite, otherwise the
+carbon listener seemed to be swamped and didn't have time to create all the
+new metrics. To be completely precise, I had problems when I sent an existing
+batch of metrics to a new "test" base, which meant Graphite / carbon had to
+create a whole lot of new whisper files all at once.
+"""
+
+import argparse
+import dataclasses
+import json
+import math
+import pickle
+import socket
+import struct
+import sys
+import time
+
+from se.metrics import open_input, unwrap_metrics_dict
+
+if sys.platform == "win32":  # pragma: no cover, needs Windows
+    # syslog is not available on Windows
+    from se import winsyslog as syslog
+else:
+    import syslog
+
+
+def log(*args):
+    """Log a message, made of the space separated arguments, to syslog."""
+    message = args[0] + " "
+    for arg in args[1:]:
+        message += arg.__str__() + " "
+    # TODO: Make this align better with the multiple logging options available
+    # elsewhere in semonitor
+    syslog.syslog(message)
+
+
+# Time to wait, in seconds, after sending a batch (or for more data
+# when following).
+delay = 0.2
+# Time to wait, in seconds, after sending a single metric as text.
+text_delay = 0.1
+
+
+def get_json_str(in_file, following):
+    """
+    Read the next line of JSON from the input.
+
+    If following is True, wait (sleeping for delay seconds between tries) until
+    a line arrives.
+
+    Args:
+        in_file: The open input file to read from.
+        following: Whether to keep waiting for new data at end of file.
+
+    Returns:
+        The line read, or an empty string at end of file when not following.
+    """
+    json_str = in_file.readline()
+    if json_str == "" and following:
+        while json_str == "":
+            # wait for more data
+            time.sleep(delay)
+            json_str = in_file.readline()
+    return json_str
+
+
+class Metrics(list):
+    """
+    Convert a nested dictionary of metrics into Graphite's list of tuples.
+
+    The list of tuples is in the format expected by the Graphite (carbon) pickle
+    interface, and is sent to carbon, either as a batch to its pickle listener
+    port, or as a line of text for each metric to its text listener port.
+    """
+
+    def __init__(self, metrics_dict, base):
+        """
+        Build the list of (name, (timestamp, value)) tuples from metrics_dict.
+
+        Args:
+            metrics_dict: A nested dictionary of devices and their attributes,
+                as produced by json.loads.
+            base: A prefix to put in front of every metric name.
+        """
+        for base_name, dev_attrs in unwrap_metrics_dict(metrics_dict):
+            # convert date and time to Unix time
+            try:
+                (year, month, day) = dev_attrs["Date"].split("-")
+                (hour, minute, second) = dev_attrs["Time"].split(":")
+            except KeyError, ValueError:
+                log(
+                    "Date or Time is missing or incorrectly formatted for this set of metrics"
+                )
+                (year, month, day, hour, minute, second) = (1970, 1, 1, 0, 1, 1)
+            # Set the dst parameter in mktime to -1, so that the system
+            # determines whether dst is in effect! Without this, when dst is in
+            # effect, the timeStamp is 3600 seconds into the future!
+            time_stamp = time.mktime(
+                (
+                    int(year),
+                    int(month),
+                    int(day),
+                    int(hour),
+                    int(minute),
+                    int(second),
+                    0,
+                    0,
+                    -1,
+                )
+            )
+            # Treat every attribute as a metric - except for non-numeric ones!
+            for dev_attr in dev_attrs:
+                if dev_attr not in {"Date", "Time", "Undeciphered_data"}:
+                    try:
+                        # Weed out attributes with non numeric values (Graphite
+                        # does this too, but why clog the network?)
+                        test = float(dev_attrs[dev_attr])
+                        if math.isnan(test):
+                            # It's a NaN!
+                            pass
+                        else:
+                            full_name = f"{base}{base_name}.{dev_attr}"
+                            # A nested tuple as per the expectations of the
+                            # pickle Graphite interface
+                            self.append(
+                                (
+                                    full_name,
+                                    (time_stamp, str(dev_attrs[dev_attr])),
+                                )
+                            )
+                    except TypeError, ValueError:
+                        # It is not a numeric metric
+                        pass
+
+    def send_pickle(self, graphite_socket):
+        """
+        Pickle the metrics and send them to the Graphite socket.
+
+        Only the list items are pickled, so that the non list attributes of self
+        do not upset carbon.
+        A short delay follows each send so that carbon is not swamped.
+
+        Args:
+            graphite_socket: A connected socket to the carbon pickle listener.
+        """
+        payload = pickle.dumps(list(self))
+        header = struct.pack("!L", len(payload))
+        graphite_socket.send(header + payload)
+        time.sleep(delay)
+
+    def send_text(self, graphite_socket):
+        """
+        Send each of the metrics to the Graphite socket as a line of text.
+
+        A short delay follows each metric so that carbon is not swamped.
+
+        Args:
+            graphite_socket: A connected socket to the carbon text listener.
+        """
+        for full_name, (time_stamp, value) in self:
+            metric = f"{full_name} {value} {time_stamp}\n"
+            graphite_socket.send(metric.encode())
+            time.sleep(text_delay)
+
+
+@dataclasses.dataclass
+class Options:
+    """The options of the command line."""
+
+    base: str = ""
+    host_name: str = "localhost"
+    port: int | None = None
+    text: bool = False
+    following: bool = False
+    in_file: object = None
+
+
+def parse_options(argv):
+    """
+    Parse the options of the command line, and open the input.
+
+    The port must be the one which Graphite (carbon) has configured to be the
+    listener port of the protocol in use. The usual Graphite installation
+    defaults are 2004 for the pickle and 2003 for the text protocol.
+
+    Args:
+        argv: The command line arguments, without the name of the program, or
+            None for those of the process.
+
+    Returns:
+        The Options, with the default port of the protocol if none was given.
+    """
+    parser = argparse.ArgumentParser(
+        description="Send SolarEdge performance data to a Graphite server.",
+    )
+    parser.add_argument(
+        "-P",
+        "--prefix",
+        dest="base",
+        metavar="PREFIX",
+        help="prefix for the names of the metrics",
+    )
+    parser.add_argument(
+        "-f",
+        "--follow",
+        dest="following",
+        action="store_true",
+        help="follow (wait for new data to be written to) the JSON input file",
+    )
+    parser.add_argument(
+        "-H",
+        "--host",
+        dest="host_name",
+        default="localhost",
+        metavar="HOST",
+        help=(
+            "host name or IP address of the Graphite server "
+            "(default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        dest="port",
+        type=int,
+        metavar="PORT",
+        help=(
+            "port of the Graphite (carbon) listener "
+            "(default: 2004, or 2003 with -e)"
+        ),
+    )
+    parser.add_argument(
+        "-e",
+        "--text",
+        dest="text",
+        action="store_true",
+        help="send the metrics to the text listener port, one at a time",
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        help="file containing performance data in JSON format (default: stdin)",
+    )
+    args = parser.parse_args(argv)
+
+    options = Options()
+    options.base = "" if args.base is None else args.base + "."
+    options.host_name = args.host_name
+    options.following = args.following
+    options.text = args.text
+    options.in_file = open_input([] if args.infile is None else [args.infile])
+    options.port = args.port
+    if options.port is None:
+        options.port = 2003 if options.text else 2004
+    return options
+
+
+def main(argv=None):
+    """
+    Send the metrics read from the input to Graphite.
+
+    Args:
+        argv: The command line arguments to use, or None for those of the
+            process.
+    """
+    options = parse_options(sys.argv[1:] if argv is None else argv)
+
+    # Timeout if no connection after 10 seconds, in which case check that
+    #   Graphite is running, and the host name and port are correct.
+    socket.setdefaulttimeout(10.0)
+    graphite_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    graphite_socket.connect((options.host_name, options.port))
+    with options.in_file:
+        json_str = get_json_str(options.in_file, options.following)
+        while json_str != "":
+            try:
+                metrics = Metrics(json.loads(json_str), base=options.base)
+                if options.text:
+                    metrics.send_text(graphite_socket)
+                else:
+                    metrics.send_pickle(graphite_socket)
+            except ValueError:
+                log(
+                    "WARNING json.loads had a problem with the following jsonStr\n",
+                    json_str,
+                    "\n",
+                    "=" * 80,
+                    "\n",
+                )
+            json_str = get_json_str(options.in_file, options.following)
+    graphite_socket.close()
+
+
+if __name__ == "__main__":
+    main()
