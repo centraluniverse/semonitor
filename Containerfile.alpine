@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Copyright (C) 2023 Olliver Schinagl <oliver@schinagl.nl>
+
+ARG PYTHON_VERSION="3-alpine"
+
+FROM index.docker.io/library/python:${PYTHON_VERSION} AS builder
+
+# Optional, overrides the version setuptools-scm takes from the git tags.
+ARG VERSION=
+
+# msgpack (pulled in by influxdb) has no wheel for some platforms, and this
+# builder has no compiler. The pure python build is enough, and this stage is
+# discarded anyway.
+ENV MSGPACK_PUREPYTHON=1
+
+WORKDIR /src/
+
+COPY . /src/
+
+RUN SETUPTOOLS_SCM_PRETEND_VERSION="${VERSION}" pip --no-cache-dir install --prefix '/install' '/src[all]'
+
+
+FROM index.docker.io/library/python:${PYTHON_VERSION}
+
+RUN apk add --no-cache 'moreutils' 'tzdata' && \
+    install -d -m 0775 '/usr/local/src' && \
+    addgroup -S 'semonitor' && \
+    adduser -D -G 'semonitor' -h '/usr/local/src/semonitor' -s '/bin/nologin' -S 'semonitor' && \
+    adduser 'semonitor' 'dialout' && \
+    install -d -m 0775 -g 'semonitor' -o 'semonitor' '/var/lib/semonitor'
+
+VOLUME /var/lib/semonitor
+
+WORKDIR /usr/local/src/semonitor/
+
+COPY --chmod=0755 packaging/container/entrypoint.sh /init
+
+COPY --from=builder /install /usr/local
+
+USER semonitor
+
+ENTRYPOINT [ "/init" ]
